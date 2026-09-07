@@ -2,7 +2,7 @@
 type: meta
 title: "Hot Cache"
 updated: 2026-09-07
-verified: 2026-09-07  # çizim izi + rün hayaleti eklendi
+verified: 2026-09-07  # wave sistemi + okçu düşman eklendi
 ---
 
 # Recent Context
@@ -11,7 +11,11 @@ verified: 2026-09-07  # çizim izi + rün hayaleti eklendi
 > Any product/build-state claim below older than 14 days is a **hypothesis, not a fact** (see Staleness Contract in `CLAUDE.md`). Verify against code, graph, or the running build before acting, then bump `verified:`.
 
 ## Last Updated
-2026-09-07 — **Çizim juice eklendi** (`scripts/rune_trail.gd`): canlı iz (parmak arkasında parlak hat + uç noktası). `RuneTrail` Node2D en son child → DrawCanvas üstüne çizer; main `set_live()` besler. "Çizerken önizleme" kolonunu karşılar. (Rün hayaleti fikri denendi, tasarımcı kararıyla iptal edildi.)
+2026-09-07 — **Ana menü eklendi** (verified 2026-09-07): `scenes/main_menu.tscn` + `scripts/main_menu.gd`. Açılış sahnesi artık menü (`project.godot` main_scene). Başlık + 3 buton (OYNA→oyun, AYARLAR→"yakında" paneli, ÇIKIŞ). Butonlar Kenney UI Pack Pixel Adventure 9-patch tile'ları (`assets/ui/*.png`, StyleBoxTexture). Global texture filter Nearest (pixel-art). → log.md
+(önceki: **İlk Android APK build alındı**)
+
+2026-09-07 — **İlk Android APK build alındı** (verified 2026-09-07): `build/wizard_game.apk` (27MB, arm64-v8a, debug-signed). Toolchain sıfırdan kuruldu (OpenJDK 17 + Android SDK build-tools;35 + export şablonları + debug keystore). Prebuilt yol (`use_gradle_build=false`). `project.godot`'a ETC2/ASTC compression zorunlu eklendi. Build komutu: `Godot --headless --path . --export-debug "Android" build/wizard_game.apk` (JAVA_HOME set). → log.md
+(önceki: **Çizim juice eklendi** — `scripts/rune_trail.gd`: canlı iz.)
 (önceki: **Kombo sistemi çekirdeği çalışıyor**.)
 
 ### (arşiv) Kombo sistemi çekirdeği
@@ -27,13 +31,14 @@ verified: 2026-09-07  # çizim izi + rün hayaleti eklendi
 - Fark: girdi = üretim (seçim değil), "ben yaptım" hissi. Reklam = oynanış (dilsiz, 6 sn).
 - **Onaylı kararlar:** sabit çizim karesi ([[Ekran Düzeni]]), savaşa 4 rün ([[Loadout Kısıtı]]), sessiz başarısızlık yok ([[Sessiz Başarısızlık Yok]]), zaaf bonus %40 ([[Zaaf Bonustur, Kapı Değil]]).
 - **Bilişsel yük 4 kolonu:** loadout, çizerken önizleme, sessiz başarısızlık yok, rün formu kısıtları (2–3 çizgi, köşeli, ayrık silüet). → [[Rün Çizim Mekaniği]]
-- **Düz çizgi** = temel saldırı + başarısızlık tabanı + komboyu taşır.
+- **Düz vuruş (strike)** = draw alanına **tık** (kaydırma değil) → anında; başarısızlık tabanı. **STANDALONE**: komboya girmez, depth/pencere açmaz — peş peşe tık sabit taban hasar (kombo yapmaz, mevcut komboyu da bozmaz). Parmak kalkınca **bekleme yok**, rün anında gönderilir (`COMMIT_DELAY` kaldırıldı 2026-09-07). X artık tek-stroke kendini-kesme ile çizilir (iki-stroke değil).
 - Tanıma: **$1 recognizer** aday (araştırılacak). Karışma matrisine göre rün ayır.
 - **Can/hasar var** (`scripts/health.gd`, `health_bar.gd`): tekrar kullanılır `Health`/`HealthBar`. Kombo hasar çarpanı + juice + dalga henüz yok. → [[Can ve Hasar Sistemi]]
-- **Tank düşman var** (`scripts/enemy.gd`): yürü + menzilde melee. Stat override ile başka arketipler (swarm) aynı node'dan. Spawn/dalga + silüetten zaaf okuma eksik. → [[Düşman Tasarımı]]
+- **Düşman + dalga sistemi var** (`scripts/enemy.gd`, `main.gd`): 3 arketip `ENEMY_TYPES` (tank melee / swarm hızlı-melee / okçu ranged mermi atar). `WAVES` sıralı dalga — temizlenince sonraki spawn, son dalga → `game_won`. Test bölümü: 3 dalga (1t+10s / 3t+2o / 2t+2o+5s). Silüetten zaaf okuma + zafer/yenilgi UI eksik. → [[Düşman Tasarımı]]
 
 ## Open Tasks
-- [[Prototip M0]] yap: 4 rün + düz çizgi, tek dalga, swarm+tank, ~30 sn. Telefonda, tek elle.
+- Zafer/yenilgi ekranı (şu an sadece `print`); dalga arası nefes/gösterge.
+- [[Prototip M0]] yap: 4 rün + düz çizgi, swarm+tank+okçu, ~30 sn. Telefonda, tek elle. (dalga sistemi hazır)
 - Test: birine 20 dk oynat → **20. dk'da düşünerek mi refleksle mi çiziyor?** (D7 tekrar riski ölçümü)
 
 ## Open Bugs

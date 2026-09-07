@@ -8,6 +8,18 @@ updated: 2026-09-06
 
 Append-only. **New entries go at the TOP.** Format:
 
+## [2026-09-07] refactor | Menü Kenney assetiyle yeniden tasarlandı
+- Files changed: `scenes/main_menu.tscn`, `assets/ui/{panel_cream,banner_red,btn_normal,btn_pressed}.png` (+.import). Eski düz `button_*`/`panel_wood` silindi.
+- İlk sürüm asseti neredeyse kullanmıyordu (3 düz tile). Yeniden: süslü krem panel (Large/Thick tile #7 NinePatchRect), kırmızı kurdele banner başlık (tile #43/44/45 PIL ile 96x32 şeride birleştirilip 3-slice NinePatchRect, patch_left/right=32), kahve butonlar (normal #5 / pressed #1 StyleBoxTexture). Örnek Sample.png estetiğine uygun.
+- Banner + panel node isimleri değişti ama script (`main_menu.gd`) node yolları güncellendi; sinyaller `Panel/Buttons/*`. Doğrulama: headless load 0 warning, viewport screenshot ile menü + ayar paneli onaylandı.
+
+## [2026-09-07] feature | Ana menü + Kenney buton assetleri
+- Files changed: `scenes/main_menu.tscn` (yeni), `scripts/main_menu.gd` (yeni), `assets/ui/{button_normal,button_pressed,panel_wood}.png` (+.import, Kenney UI Pack Pixel Adventure'dan kopya), `project.godot` (main_scene → main_menu.tscn; `default_texture_filter=0` nearest).
+- İlk menü ekranı: başlık "RÜN BÜYÜCÜSÜ" + 3 buton (OYNA → main.tscn, AYARLAR → "yakında" paneli aç/kapa, ÇIKIŞ → quit). Butonlar Kenney "Large tiles/Thick outline" 9-patch tile'lar (tile_0000 ahşap+krem = normal, tile_0001 kahve = pressed) StyleBoxTexture ile, texture_margin=6.
+- Pixel-art keskin dursun diye global canvas texture filter Nearest yapıldı (oyun şu an salt ColorRect, güvenli). Not: kopyalanan `panel_blue` aslında kahve render etti → `panel_wood` olarak yeniden adlandırıldı.
+- Doğrulama: headless load temiz (0 warning/error), viewport screenshot ile menü + ayar paneli görsel onaylandı.
+
+
 ```
 ## [YYYY-MM-DD] <type> | <short title>
 - Files changed: list them
@@ -16,6 +28,54 @@ Append-only. **New entries go at the TOP.** Format:
 ```
 
 Types: `fix`, `feature`, `refactor`, `disable`, `config`, `document`
+
+---
+
+## [2026-09-07] feature | Wave sistemi + okçu (ranged) düşman
+- Files changed: `scripts/main.gd`, `scripts/enemy.gd`, `wiki/design/enemy-design.md`
+- `main.gd`: düz `ENEMY_PROFILES` → `ENEMY_TYPES` (tank/swarm/archer arketipleri) + `WAVES` (sıralı dalgalar). `_advance_wave`/`_spawn_wave`: dalga temizlenince (`_alive_count()==0`) sonraki spawn; son dalga → `_on_all_waves_cleared` (`game_won`). Sahne `Enemy` node'u artık kullanılmıyor, `_ready`'de free — hepsi koddan spawn. Düşmanlar SPAWN_X bandına yayılır.
+- Okçu: `enemy.gd`'ye `is_ranged` + `fired(muzzle,damage)` sinyali + `_muzzle()`. Menzilde durur, mermi atar; `main._on_enemy_fired`/`_advance_enemy_projectiles` mermiyi oyuncuya taşır, isabette hasar.
+- Test bölümü: Dalga1 = 1 tank+10 swarm, Dalga2 = 3 tank+2 okçu, Dalga3 = 2 tank+2 okçu+5 swarm.
+- Doğrulama: MCP run_project → "Dalga 1/3 başladı — 11 düşman", parse temiz (yalnız combo_resolver.gd eski uyarıları).
+
+## [2026-09-07] refactor | Snap sistemi TAMAMEN kaldırıldı
+- Files changed: `scripts/recognizer_adapter.gd`, `scripts/rune_trail.gd`, `scripts/main.gd`, `scripts/core/rune_db.gd`, `data/combo_config.json`
+- Kullanıcı: snap hissi kötü → geri al. Çapa grid + snap (setup_anchors, snap_stroke, _snap_all/_nearest_anchor, anchor_cols/rows, draw_anchors config) ve `RuneTrail` Catmull-Rom smooth/glow SÖKÜLDÜ.
+- `classify_shape` yine ham izde; `RuneTrail` yine ham `draw_polyline`; `main` trail'e ham strokes/current verir. `grep snap|anchor|catmull` = 0.
+- KORUNAN: tık=düz vuruş + bekleme yok, strike standalone, tek-stroke self-cross X. Doğrulama: MCP run, parse temiz.
+- Sonuç: aşağıdaki iki snap feature girişi (aynı gün) etkisiz — geçmiş için bırakıldı.
+
+## [2026-09-07] feature | Snapped iz ekranda görünür (smooth) — çapa grid
+- Files changed: `scripts/rune_trail.gd`, `scripts/main.gd`, `scripts/recognizer_adapter.gd`
+- Düzeltme (kullanıcı): görünen iz **snapped** olmalı, ham değil. `main._process` her frame `recognizer.snap_stroke` ile snapped diziyi üretip trail'e verir. `RuneTrail` çapa dizisini **Catmull-Rom** smooth eğriye çevirir + halo/çekirdek glow → snapped ama akıcı/parlayan; uçta çapa işaretçisi (manyetik his). `recognizer.snap_stroke` public eklendi.
+
+## [2026-09-07] feature | Gizli çapa grid — snap'li ayrık tanıma
+- Files changed: `scripts/recognizer_adapter.gd`, `scripts/core/rune_db.gd`, `scripts/main.gd`, `data/combo_config.json`, `wiki/design/rune-drawing-mechanic.md`
+- Çizim karesine gizli sabit grid (`draw_anchors.cols/rows`, vars. 5×5). TANIMA ham izi en yakın çapaya snap'leyip ardışık tekrarları tekilleştirerek **ayrık anchor dizisi** üstünde yapılır → kanonik şekil, daha net rün.
+- `RecognizerAdapter`: `setup_anchors(rect,cols,rows)` + `_snap_all/_snap_stroke/_nearest_anchor`; `classify_shape` snapped dizide çalışır. Grid kurulmazsa ham noktalar (headless güvenli).
+- `RuneDB`: `anchor_cols/anchor_rows` parse. `main._ready`: `setup_anchors(canvas_rect, ...)`.
+- Doğrulama: MCP Godot 4.7.2 sahne run — tüm rünler + füzyonlar tanındı, strike'lar 10 sabit, parse temiz.
+
+## [2026-09-07] fix | Strike standalone — peş peşe tık hasarı büyümesin
+- Files changed: `scripts/core/combo_state_machine.gd`, `tests/test_state_machine.gd`
+- Bug: strike komboya giriyordu → peş peşe tık depth'i artırıp hasarı ×1.6/rün büyütüyordu; ayrıca strike pencere açıp time-scale yavaşlatınca sonraki çizim 2. kombo vuruşu oluyordu ("önce düz vuruş, sonra çizim" hissi).
+- Fix: `on_finger_up`'ta STRIKE artık **standalone** — komboya eklenmez, pencere açmaz/uzatmaz, depth artmaz. `recognized = ... and rune_id != STRIKE`, yani hem tık (null) hem çizilen düz çizgi (`line`->`strike`) sabit taban hasar verir. Süren kombo bozulmaz (neutral).
+- Test: `tanınmayan-strike` bölümü güncellendi — peş peşe strike aynı hasar, depth 0.
+
+## [2026-09-07] feature | Tık = düz vuruş + commit beklemesi kaldırıldı
+- Files changed: `scripts/main.gd`, `scripts/recognizer_adapter.gd`
+- `COMMIT_DELAY` (0.22s) / `commit_left` zamanlayıcı silindi. Parmak kalkınca `_unhandled_input` anında `_commit()` çağırıyor — bekleme yok. Hareketsiz/kısa stroke → tanıma `none` → `null` → strike, yani draw alanına **tıkla = düz vuruş**.
+- Bekleme kalkınca iki-stroke X birleştirme imkânsız; kaybetmemek için `recognizer_adapter.classify_shape`'e tek-stroke kendini-kesme (`_self_crosses`) → `X` eklendi. Sıra: multi-cross→X, O, self-cross→X, köşe sayısı→line/V/lightning.
+- Çekirdek (`scripts/core/`) ve testler değişmedi; SM `on_finger_down/up` aynı.
+
+## [2026-09-07] config | İlk Android APK build (prebuilt debug)
+
+- Files changed: `project.godot`, `export_presets.cfg`, `.gitignore`
+- **Android toolchain kuruldu** (bu makinede sıfırdı): OpenJDK 17 (`brew openjdk@17`), Android cmdline-tools + platform-tools + build-tools;35.0.0 + platforms;android-35 (`/opt/homebrew/share/android-commandlinetools`), Godot 4.7.2 Android export şablonları, debug keystore (`~/.android/debug.keystore`, alias `androiddebugkey`). Godot editor ayarlarına SDK/Java/keystore path yazıldı.
+- **project.godot:** `rendering/textures/vram_compression/import_etc2_astc=true` eklendi — Android export zorunlu kılıyor.
+- **export_presets.cfg:** `version/name="1.0"`, `package/unique_name="com.example.wizardgame"`, `package/name="Wizard Game"` dolduruldu.
+- Çıktı: `build/wizard_game.apk` (27MB, arm64-v8a, debug-signed). Prebuilt template yolu (`use_gradle_build=false`). `build/` gitignore'a eklendi.
+- Komut: `Godot --headless --path . --export-debug "Android" build/wizard_game.apk` (JAVA_HOME set).
 
 ---
 

@@ -52,16 +52,25 @@ func on_finger_down() -> void:
 	_recompute_time_scale()
 
 # Parmak kalktı. rune_id: tanınan rün veya null (null/geçersiz -> strike).
-# Normal: birikmiş komboyu tek büyüye çözer, döndürür, ComboWindow açar.
+# Tanınan rün: birikmiş komboyu tek büyüye çözer, döndürür, ComboWindow açar.
+# STRIKE (düz vuruş / tık): STANDALONE — komboya EKLENMEZ, pencere AÇMAZ/uzatmaz,
+#   depth artmaz (peş peşe tık hasarı büyütmez). Süren kombo korunur (bozmaz).
 # Overdrive: rünü biriktirir, null döner (anlık büyü yok).
 func on_finger_up(rune_id) -> ResolvedSpell:
-	var rid: String = rune_id if (rune_id != null and _db.has_rune(rune_id)) else STRIKE
+	# STRIKE her zaman standalone: tık (null/geçersiz) VEYA çizilen düz çizgi (-> "strike").
+	var recognized: bool = rune_id != null and _db.has_rune(rune_id) and rune_id != STRIKE
 
 	if overdrive_active:
-		_overdrive_runes.append(rid)
+		_overdrive_runes.append(rune_id if recognized else STRIKE)
 		return null
 
-	combo_runes.append(rid)
+	if not recognized:
+		# Düz vuruş: kombodan bağımsız sabit taban. Casting'ten çık, komboya dokunma.
+		state = State.WINDOW if not combo_runes.is_empty() else State.IDLE
+		_recompute_time_scale()
+		return ComboResolver.resolve([STRIKE], _db)
+
+	combo_runes.append(rune_id)
 	depth = combo_runes.size()
 	var spell := ComboResolver.resolve(combo_runes, _db)
 	last_spell = spell

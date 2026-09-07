@@ -17,22 +17,34 @@ const EnemyScript = preload("res://scripts/enemy.gd")
 
 const MIN_LEN := 60.0          # geçerli stroke min uzunluk (px)
 const PROJ_SPEED := 1400.0     # mermi hızı (px/sn)
-const COMMIT_DELAY := 0.22     # düz çizgi/X için ikinci stroke bekleme süresi
 
 # Can / hasar
 const PLAYER_MAX_HP := 100
 
-# Düşman dalgası — karışık arketip + farklı zaaf (kombo/zincir/zaaf %40 testi).
-# İlk profil sahnedeki Enemy node'unu kullanır; kalanlar koddan spawn edilir.
-# weakness: doğru etki tam hasar, yanlış etki %40 (bkz DamageRules).
-const ENEMY_PROFILES := [
-	{"x": 760.0, "hp": 400, "w": "Burn",    "size": Vector2(150, 300), "col": Color(0.85, 0.35, 0.30, 1), "speed": 45.0, "dmg": 5, "cd": 1.4},
-	{"x": 680.0, "hp": 400, "w": "Freeze",  "size": Vector2(150, 300), "col": Color(0.30, 0.55, 0.70, 1), "speed": 45.0, "dmg": 5, "cd": 1.4},
-	{"x": 860.0, "hp": 250, "w": "Shatter", "size": Vector2(110, 180), "col": Color(0.80, 0.70, 0.25, 1), "speed": 60.0, "dmg": 4, "cd": 1.2},
-	{"x": 940.0, "hp": 150, "w": "Push",    "size": Vector2(90, 120),  "col": Color(0.45, 0.75, 0.45, 1), "speed": 95.0, "dmg": 3, "cd": 1.0},
-	{"x": 1010.0,"hp": 150, "w": "Burn",    "size": Vector2(90, 120),  "col": Color(0.80, 0.45, 0.40, 1), "speed": 95.0, "dmg": 3, "cd": 1.0},
+# Düşman arketipleri — sabit temel istatistik. Dalga tanımı bunlara ADLA atıfta
+# bulunur (bkz WAVES). weakness (w): doğru etki tam hasar, yanlış etki %40 (DamageRules).
+#   tank   : yüksek HP, düşük hasar, yavaş — melee. Öldürmesi zor, tehlike yavaş.
+#   swarm  : düşük HP, hızlı, sürü — melee. Tek tek zayıf, kalabalıkla ezer.
+#   archer : orta HP — RANGED. Menzilde durur, mermi atar (bkz enemy.is_ranged).
+const ENEMY_TYPES := {
+	"tank":   {"hp": 400, "w": "Burn",   "size": Vector2(150, 300), "col": Color(0.85, 0.35, 0.30, 1), "speed": 45.0,  "dmg": 5, "cd": 1.4, "ranged": false},
+	"swarm":  {"hp": 60,  "w": "Push",   "size": Vector2(55, 90),   "col": Color(0.55, 0.75, 0.40, 1), "speed": 120.0, "dmg": 2, "cd": 0.8, "ranged": false},
+	"archer": {"hp": 120, "w": "Freeze", "size": Vector2(80, 150),  "col": Color(0.80, 0.70, 0.25, 1), "speed": 70.0,  "dmg": 4, "cd": 1.6, "ranged": true, "range": 360.0},
+}
+
+# Dalgalar sırayla gelir: bir dalga tamamen temizlenince sonraki spawn olur.
+# Her giriş [tür, adet]. Son dalga bitince oyun kazanılır.
+const WAVES := [
+	[["tank", 1], ["swarm", 10]],                  # Dalga 1
+	[["tank", 3], ["archer", 2]],                  # Dalga 2
+	[["tank", 2], ["archer", 2], ["swarm", 5]],    # Dalga 3 (son)
 ]
+
 const GROUND_Y := 992.0
+const ENEMY_PROJ_SPEED := 650.0   # okçu mermisi hızı (px/sn)
+# Düşmanlar bu x bandına yayılarak spawn olur (oyuncu solda ~150).
+const SPAWN_X_MIN := 520.0
+const SPAWN_X_MAX := 1040.0
 
 # Etki -> mermi rengi
 const EFFECT_COLOR := {
@@ -48,7 +60,6 @@ var drawing := false
 var casting_active := false     # mid-rün çizim (ilk stroke ile başlar, commit ile biter)
 var current: PackedVector2Array = []
 var strokes: Array = []
-var commit_left := -1.0
 var projectiles: Array = []
 
 # Kombo çekirdeği
@@ -64,8 +75,11 @@ var _last_usec: int = 0
 
 var player_health
 var player_bar
-var enemies: Array = []   # her giriş: {body, health, bar, ai, weakness}
+var enemies: Array = []           # her giriş: {body, health, bar, ai, weakness}
+var enemy_projectiles: Array = [] # okçu mermileri (oyuncuya doğru)
+var current_wave := -1            # aktif dalga indeksi (spawn öncesi -1)
 var game_over := false
+var game_won := false
 
 func _ready() -> void:
 	# Kombo çekirdeği kur
@@ -93,19 +107,51 @@ func _ready() -> void:
 	player_health.damaged.connect(_on_player_damaged)
 	player_health.died.connect(_on_player_died)
 
-	# Düşman dalgası: ilk profil sahne node'u, kalanlar spawn.
-	for i in range(ENEMY_PROFILES.size()):
-		var p: Dictionary = ENEMY_PROFILES[i]
-		var body: ColorRect = enemy if i == 0 else _spawn_body(p)
-		if i == 0:
-			body.size = p["size"]
-			body.color = p["col"]
-		body.position = Vector2(p["x"], GROUND_Y - p["size"].y)
-		enemies.append(_make_enemy(body, p))
+	# Sahnedeki tekil Enemy node artık kullanılmıyor — tüm düşmanlar dalga dalga
+	# koddan spawn edilir. Node'u temizle (yoksa boş kutu ekranda kalır).
+	if is_instance_valid(enemy):
+		enemy.queue_free()
 
 	# Çizim izi + rün hayaleti — EN SON child (DrawCanvas'ın üstüne çizsin).
 	trail = RuneTrail.new()
 	add_child(trail)
+
+	# İlk dalgayı başlat.
+	_advance_wave()
+
+# --- Dalga sistemi ---
+
+# Sonraki dalgaya geç: son dalga geçildiyse oyunu kazan, değilse spawn et.
+func _advance_wave() -> void:
+	current_wave += 1
+	if current_wave >= WAVES.size():
+		_on_all_waves_cleared()
+		return
+	_spawn_wave(current_wave)
+	print("Dalga %d/%d başladı — %d düşman" % [
+		current_wave + 1, WAVES.size(), _alive_count()])
+
+# Dalga tanımını [tür, adet] listelerinden açar, x bandına yayarak spawn eder.
+func _spawn_wave(index: int) -> void:
+	var types: Array = []
+	for pair in WAVES[index]:
+		for _i in range(int(pair[1])):
+			types.append(pair[0])
+	var n := types.size()
+	for i in range(n):
+		var p: Dictionary = (ENEMY_TYPES[types[i]] as Dictionary).duplicate()
+		var x := (SPAWN_X_MIN + SPAWN_X_MAX) * 0.5
+		if n > 1:
+			x = SPAWN_X_MIN + (SPAWN_X_MAX - SPAWN_X_MIN) * float(i) / float(n - 1)
+		var body := _spawn_body(p)
+		body.position = Vector2(x, GROUND_Y - p["size"].y)
+		enemies.append(_make_enemy(body, p))
+
+func _on_all_waves_cleared() -> void:
+	game_won = true
+	game_over = true
+	Engine.time_scale = 1.0
+	print("Tüm dalgalar temizlendi — ZAFER")
 
 func _spawn_body(p: Dictionary) -> ColorRect:
 	var body := ColorRect.new()
@@ -123,6 +169,10 @@ func _make_enemy(body: ColorRect, p: Dictionary) -> Dictionary:
 	ai.move_speed = p["speed"]
 	ai.attack_damage = p["dmg"]
 	ai.attack_cooldown = p["cd"]
+	if p.get("ranged", false):
+		ai.is_ranged = true
+		ai.attack_range = p.get("range", 360.0)
+		ai.fired.connect(_on_enemy_fired)
 	body.add_child(ai)
 	ai.setup(body, player, player_health, health)
 	var entry := {"body": body, "health": health, "bar": bar, "ai": ai, "weakness": p["w"]}
@@ -164,7 +214,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed and canvas.get_global_rect().has_point(event.position):
 			drawing = true
-			commit_left = -1.0
 			current = PackedVector2Array([event.position])
 			if not casting_active:
 				casting_active = true
@@ -173,12 +222,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			drawing = false
 			if current.size() >= 2:
 				strokes.append(current)
-			# Tek stroke ve düz değilse X olamaz -> anında commit.
-			if strokes.size() == 1 and recognizer.classify_shape(strokes) != "line":
-				commit_left = -1.0
-				_commit()
-			else:
-				commit_left = COMMIT_DELAY
+			# Parmak kalktı -> bekleme YOK, anında commit.
+			# Hareketsiz/kısa stroke -> tanıma "none" -> null -> strike (düz vuruş=tık).
+			_commit()
 	elif event is InputEventMouseMotion and drawing:
 		current.append(event.position)
 
@@ -198,7 +244,6 @@ func _process(_delta: float) -> void:
 		if drawing and current.size() >= 2 and (strokes.is_empty() or strokes[strokes.size() - 1] != current):
 			strokes.append(current)
 		drawing = false
-		commit_left = -1.0
 		_commit()
 
 	# Overdrive bitince biriken rünler TEK büyü olarak çıkar.
@@ -206,18 +251,12 @@ func _process(_delta: float) -> void:
 	if od_spell != null:
 		_fire_spell(od_spell)
 
-	# Normal commit zamanlayıcısı (ölçekli delta yerine gerçek dt kullan).
-	if commit_left > 0.0:
-		commit_left -= unscaled_dt
-		if commit_left <= 0.0:
-			commit_left = -1.0
-			_commit()
-
 	for e in enemies:
 		if is_instance_valid(e["body"]) and e["health"].is_alive():
 			e["ai"].tick(_delta)   # ölçekli delta (yavaş-mo'da yavaşlar)
 			_place_bar(e["bar"], e["body"])
 	_advance_projectiles(_delta)
+	_advance_enemy_projectiles(_delta)
 
 	# Canlı çizim izini güncelle (stroke'lar + aktif current).
 	trail.set_live(strokes, current, drawing)
@@ -233,6 +272,9 @@ func _on_enemy_died(entry: Dictionary) -> void:
 		entry["bar"].queue_free()
 	if is_instance_valid(entry["body"]):
 		entry["body"].queue_free()
+	# Dalga temizlendi mi? (ölen düşman zaten is_alive()==false, sayımdan düştü.)
+	if not game_over and _alive_count() == 0:
+		_advance_wave()
 
 func _alive_count() -> int:
 	var n := 0
@@ -328,3 +370,33 @@ func _advance_projectiles(delta: float) -> void:
 			proj.queue_free()
 		else:
 			proj.global_position += to.normalized() * PROJ_SPEED * delta
+
+# --- Okçu mermileri (düşman -> oyuncu) ---
+
+# enemy.gd ranged saldırısı bunu tetikler: namludan oyuncuya bir mermi doğar.
+func _on_enemy_fired(from: Vector2, damage: int) -> void:
+	if game_over:
+		return
+	var proj := ColorRect.new()
+	proj.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	proj.size = Vector2(26, 10)
+	proj.color = Color(0.9, 0.5, 0.25, 1)
+	proj.set_meta("damage", damage)
+	add_child(proj)
+	proj.global_position = from - proj.size * 0.5
+	enemy_projectiles.append(proj)
+
+func _advance_enemy_projectiles(delta: float) -> void:
+	if enemy_projectiles.is_empty():
+		return
+	var pc := player.get_global_rect().get_center()
+	for proj in enemy_projectiles.duplicate():
+		var center: Vector2 = proj.global_position + proj.size * 0.5
+		var to := pc - center
+		if to.length() <= ENEMY_PROJ_SPEED * delta + 6.0:
+			if player_health != null and player_health.is_alive():
+				player_health.take_damage(proj.get_meta("damage", 0))
+			enemy_projectiles.erase(proj)
+			proj.queue_free()
+		else:
+			proj.global_position += to.normalized() * ENEMY_PROJ_SPEED * delta

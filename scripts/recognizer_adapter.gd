@@ -41,6 +41,9 @@ func classify_shape(all_strokes: Array) -> String:
 		return "none"
 	if rs[0].distance_to(rs[rs.size() - 1]) / plen < CLOSED_RATIO:
 		return "O"
+	# Bekleme kalktı: iki-stroke X yok. Tek stroke kendini keserse X.
+	if _self_crosses(rs):
+		return "X"
 	var corners := _count_corners(rs)
 	if corners == 0:
 		return "line"
@@ -58,6 +61,14 @@ func _strokes_cross(all_strokes: Array) -> bool:
 				for n in range(b.size() - 1):
 					if Geometry2D.segment_intersects_segment(a[m], a[m + 1], b[n], b[n + 1]) != null:
 						return true
+	return false
+
+# Tek stroke kendini kesiyor mu? Komşu segmentleri (paylaşılan uç) atla.
+func _self_crosses(pts: PackedVector2Array) -> bool:
+	for i in range(pts.size() - 1):
+		for j in range(i + 2, pts.size() - 1):
+			if Geometry2D.segment_intersects_segment(pts[i], pts[i + 1], pts[j], pts[j + 1]) != null:
+				return true
 	return false
 
 func _count_corners(pts: PackedVector2Array) -> int:

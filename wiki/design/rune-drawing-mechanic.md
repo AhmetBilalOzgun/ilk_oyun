@@ -3,7 +3,7 @@ type: design
 title: "Rün Çizim Mekaniği"
 created: 2026-09-07
 updated: 2026-09-07
-verified: 2026-09-07
+verified: 2026-09-07  # gizli çapa grid snap + strike standalone
 tags:
   - design
   - mechanic
@@ -14,7 +14,13 @@ related:
   - "[[Kombo ve Palet]]"
   - "[[Loadout Kısıtı]]"
   - "[[Çizim Tanıma — $1 Recognizer]]"
-code_anchors: []
+code_anchors:
+  - repo: game
+    symbol: RecognizerAdapter.classify_shape
+    file: scripts/recognizer_adapter.gd
+  - repo: game
+    symbol: ComboStateMachine.on_finger_up
+    file: scripts/core/combo_state_machine.gd
 ---
 
 # Rün Çizim Mekaniği
@@ -32,9 +38,13 @@ code_anchors: []
    - Silüet olarak birbirine benzemeyen formlar.
    - İlk 20 dk tanıma toleransı gizlice çok geniş, sonra yavaşça daralır.
 
-## Düz çizgi (temel saldırı)
+## Çizim tanıma — ham iz (snap YOK) (verified 2026-09-07)
 
-Tek basit jest = düşük hasarlı düz vuruş. Üç iş birden:
+Çapa/snap sistemi **denendi ve kaldırıldı** (kötü his). Tanıma doğrudan ham parmak izinde: `RecognizerAdapter.classify_shape` resample + köşe/kesişim geometrisiyle line/X/O/V/lightning ayırır. Görünen iz de ham/akıcı (`RuneTrail`, `draw_polyline`). Tek çizim kendini keserse X. → [[Çizim Tanıma — $1 Recognizer]]
+
+## Düz vuruş (temel saldırı) — tık, standalone (verified 2026-09-07)
+
+Çizim alanına **tık** (kaydırma değil) = düşük hasarlı düz vuruş, **anında** (parmak kalkınca bekleme yok). Tanınmayan her karalama + çizilen düz çizgi de buraya düşer. Üç iş birden:
 
 1. **Ritim** — büyük büyüler arasında ölü zaman kalmaz.
 2. **İlk hamle kazandırır** — yeni oyuncuya ilk saniyeden %100 başarılı eylem.
@@ -42,7 +52,7 @@ Tek basit jest = düşük hasarlı düz vuruş. Üç iş birden:
 
 **Denge riski:** çok güçlü → spam; çok zayıf → dekor.
 
-**Önerilen çözüm (hasarda değil işlevde):** düz çizgi komboyu **taşısın**. rün → çizgi → rün zinciri kombo penceresini kırmadan devam etsin. Dolgu olmaktan çıkıp ritim mekaniğine döner.
+**Karar (değişti 2026-09-07):** strike artık komboyu **taşımaz** — **standalone** sabit taban hasar. Neden: peş peşe tık depth'i artırıp hasarı katlıyordu (kombo istismarı) ve strike'ın açtığı pencere/yavaşlama sonraki çizimi yanlışlıkla 2. kombo vuruşu yapıyordu. Strike artık pencere açmaz, depth'i artırmaz, süren komboyu da bozmaz. Sadece gerçek rünler (ember/frost/gale/storm) zincirlenir. → `ComboStateMachine.on_finger_up`
 
 ## Player Experience Goal
 

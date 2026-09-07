@@ -56,7 +56,11 @@ static func run(t) -> void:
 	var sp := sm.on_finger_up(null)  # tanınmadı -> strike
 	t.check(sp != null and sp.carrier == "Projectile" and sp.effects.is_empty(),
 		"null -> strike'a düştü (etki yok)")
-	t.check(sm.depth == 1, "strike komboyu taşır (depth arttı)")
+	t.check(sm.depth == 0, "strike STANDALONE (depth artmaz, kombo yapmaz)")
+	# peş peşe strike hasarı büyütmez (sabit taban)
+	var sp_again := sm.on_finger_up(null)
+	t.check(sp_again.damage == sp.damage and sm.depth == 0,
+		"peş peşe strike aynı hasar, depth 0 kalır")
 	# geçersiz id de strike
 	sm = _make(t)
 	sm.on_finger_down()

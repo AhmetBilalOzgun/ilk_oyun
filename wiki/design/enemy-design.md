@@ -16,6 +16,12 @@ code_anchors:
   - repo: game
     symbol: Enemy
     file: scripts/enemy.gd
+  - repo: game
+    symbol: _spawn_wave
+    file: scripts/main.gd
+  - repo: game
+    symbol: _advance_wave
+    file: scripts/main.gd
 ---
 
 # Düşman Tasarımı
@@ -45,11 +51,23 @@ Oyuncu düşmana bakıp refleksle doğru cevabı çizer; hatırlamak değil gör
 Yeniden kullanılabilir `Enemy` node'u (`scripts/enemy.gd`), main.gd tarafından `preload` + `setup()` + her frame `tick(delta)` ile sürülür (health.gd pattern'i, `class_name` yok). Görsel/HP yok — Health bileşeni ayrı.
 
 - **Davranış:** gövdeyi hedefe (Player) doğru yatay yürütür; kenar-kenar mesafe `attack_range` altına inince `attack_cooldown` periyoduyla melee vurur, `attacked(damage)` sinyali yayar. Saldırı **yalnız menzilde** (eski uzaktan-hasar bug'ının fix'i).
-- **Tank profili (@export defaults + `ENEMY_MAX_HP`):** HP 400, hasar 5, hız 45 px/sn, menzil 24 px, cooldown 1.4 sn → öldürmesi zor (~13-40 rün), tehlikesi yavaş birikir. Stat'lar override edilebilir → başka arketipler (swarm: düşük HP, hızlı) aynı node'dan.
+- **Ranged (okçu):** `is_ranged=true` ise menzilde durur (attack_range büyük, 360 px), yaklaşmaz; cooldown'da `fired(muzzle, damage)` yayar. Hasar melee gibi anında değil — `main._on_enemy_fired` namludan oyuncuya bir mermi doğurur, `_advance_enemy_projectiles` oyuncuya taşır, isabette `player_health.take_damage`.
 - Can çubuğu tank yürüdükçe `_place_bar()` ile takip eder.
+
+## Arketipler ve dalgalar (verified 2026-09-07)
+
+`main.gd` `ENEMY_TYPES` sabiti temel istatistikleri ada bağlar; `WAVES` bunlara adla atıfta bulunur. Dalgalar **sırayla** gelir — bir dalga tam temizlenince (`_alive_count()==0`) `_advance_wave` sonrakini spawn eder; son dalga bitince `_on_all_waves_cleared` → zafer (`game_won`).
+
+| Tür | HP | Hız | Hasar | cd | Menzil | Zaaf |
+|---|---|---|---|---|---|---|
+| tank | 400 | 45 | 5 | 1.4 | melee 24 | Burn |
+| swarm | 60 | 120 | 2 | 0.8 | melee | Push |
+| archer | 120 | 70 | 4 | 1.6 | ranged 360 | Freeze |
+
+**Test bölümü (WAVES):** Dalga 1 = 1 tank + 10 swarm; Dalga 2 = 3 tank + 2 okçu; Dalga 3 (son) = 2 tank + 2 okçu + 5 swarm. Düşmanlar `SPAWN_X_MIN..MAX` (520–1040) bandına yayılarak spawn olur, sola (oyuncuya) yürür.
 
 ## Open Questions
 
-- Prototip 2 düşman tipiyle başlıyor: swarm (kalabalık+küçük) + tank (büyük+zırhlı). Tank var; swarm eksik.
-- Spawn/dalga sistemi yok — tek tank, punching-bag değil ama tek. → [[Prototip M0]]
-- Silüetten zaaf okuma henüz kodda yok (tank/swarm görsel ayrımı, rün→zaaf eşlemesi).
+- Dalga sistemi var (sıralı, 3 test dalgası). Zafer/yenilgi `game_won`/`game_over` sadece `print` — UI ekranı yok.
+- Silüetten zaaf okuma henüz kodda yok (tank/swarm/okçu görsel ayrımı sadece renk/boyut; rün→zaaf eşlemesi ezber riski).
+- Okçu mermisi düz hat, engel/blok yok; swarm sürü davranışı yok (bağımsız yürür).
