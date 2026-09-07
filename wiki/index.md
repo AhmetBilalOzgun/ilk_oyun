@@ -14,7 +14,7 @@ Master catalog. Update on every ingest.
 - [[Design Index]]
 - [[Rün Büyücüsü — Konsept]] — genel konsept
 - [[Ekran Düzeni]] · [[Rün Çizim Mekaniği]] · [[Kombo ve Palet]] · [[Düşman Tasarımı]]
-- [[Juice ve Geri Bildirim]] · [[Oturum Yapısı ve Başarısızlık]]
+- [[Juice ve Geri Bildirim]] · [[Oturum Yapısı ve Başarısızlık]] · [[Can ve Hasar Sistemi]]
 
 ## Decisions
 

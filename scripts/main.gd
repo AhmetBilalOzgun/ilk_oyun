@@ -8,6 +8,9 @@ extends Node2D
 #   V  (tek keskin köşe)        -> yeşil mermi
 # Her rün Player'dan Enemy'ye mermi gönderir. Hasar/can yok; logic + renk.
 
+const HealthScript = preload("res://scripts/health.gd")
+const HealthBarScript = preload("res://scripts/health_bar.gd")
+
 @onready var player: ColorRect = $BattleArea/Player
 @onready var enemy: ColorRect = $BattleArea/Enemy
 @onready var canvas: ColorRect = $DrawArea/DrawCanvas
@@ -17,6 +20,12 @@ const PROJ_SPEED := 1400.0     # mermi hızı (px/sn)
 const COMMIT_DELAY := 0.22     # düz çizgi/X için ikinci stroke bekleme süresi
 const CORNER_DEG := 55.0       # köşe sayılacak min dönüş açısı
 const CLOSED_RATIO := 0.30     # kapalı şekil: baş-son mesafe / yol uzunluğu eşiği
+
+# Can / hasar
+const PLAYER_MAX_HP := 100
+const ENEMY_MAX_HP := 100
+# Rüne göre mermi hasarı
+const RUNE_DAMAGE := {"line": 10, "X": 25, "O": 15, "lightning": 30, "V": 20}
 
 # Rün renkleri
 const C_LINE := Color(0.9, 0.9, 0.9, 1)     # düz vuruş
@@ -31,7 +40,40 @@ var strokes: Array = []
 var commit_left := -1.0
 var projectiles: Array = []
 
+var player_health
+var enemy_health
+var player_bar
+var enemy_bar
+var game_over := false
+
+func _ready() -> void:
+	player_health = _make_health(player, PLAYER_MAX_HP)
+	enemy_health = _make_health(enemy, ENEMY_MAX_HP)
+	player_bar = _make_bar(player)
+	enemy_bar = _make_bar(enemy)
+	player_health.damaged.connect(func(_a, _h): player_bar.set_ratio(player_health.ratio()))
+	enemy_health.damaged.connect(func(_a, _h): enemy_bar.set_ratio(enemy_health.ratio()))
+	player_health.died.connect(_on_player_died)
+	enemy_health.died.connect(_on_enemy_died)
+
+func _make_health(unit: ColorRect, max_hp: int):
+	var h = HealthScript.new()
+	h.max_hp = max_hp
+	unit.add_child(h)
+	return h
+
+func _make_bar(unit: ColorRect):
+	var bar = HealthBarScript.new()
+	add_child(bar)
+	var r := unit.get_global_rect()
+	bar.global_position = Vector2(
+		r.position.x + r.size.x * 0.5 - HealthBarScript.WIDTH * 0.5,
+		r.position.y - HealthBarScript.HEIGHT - 8.0)
+	return bar
+
 func _unhandled_input(event: InputEvent) -> void:
+	if game_over:
+		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed and canvas.get_global_rect().has_point(event.position):
 			drawing = true
@@ -52,12 +94,25 @@ func _unhandled_input(event: InputEvent) -> void:
 		current.append(event.position)
 
 func _process(delta: float) -> void:
+	if game_over:
+		return
 	if commit_left > 0.0:
 		commit_left -= delta
 		if commit_left <= 0.0:
 			commit_left = -1.0
 			_commit()
 	_advance_projectiles(delta)
+
+# --- Can / hasar ---
+
+func _on_enemy_died() -> void:
+	print("Düşman öldü")
+	enemy_bar.queue_free()
+	enemy.queue_free()
+
+func _on_player_died() -> void:
+	game_over = true
+	print("Oyun bitti — büyücü öldü")
 
 # --- Rün sınıflandırma ---
 
@@ -69,19 +124,19 @@ func _commit() -> void:
 	match rune:
 		"line":
 			print("Düz çizgi -> düz vuruş")
-			_fire(C_LINE)
+			_fire(C_LINE, RUNE_DAMAGE["line"])
 		"X":
 			print("X rünü")
-			_fire(C_X)
+			_fire(C_X, RUNE_DAMAGE["X"])
 		"O":
 			print("O rünü")
-			_fire(C_O)
+			_fire(C_O, RUNE_DAMAGE["O"])
 		"lightning":
 			print("Yıldırım rünü")
-			_fire(C_LIGHT)
+			_fire(C_LIGHT, RUNE_DAMAGE["lightning"])
 		"V":
 			print("V rünü")
-			_fire(C_V)
+			_fire(C_V, RUNE_DAMAGE["V"])
 		_:
 			print("Rün tanınmadı, vuruş yok")
 
@@ -164,10 +219,11 @@ func _resample(pts: PackedVector2Array, n: int) -> PackedVector2Array:
 
 # --- Mermi ---
 
-func _fire(color: Color) -> void:
+func _fire(color: Color, damage: int) -> void:
 	var proj := ColorRect.new()
 	proj.size = Vector2(48, 22)
 	proj.color = color
+	proj.set_meta("damage", damage)
 	add_child(proj)
 	proj.global_position = _player_muzzle() - proj.size * 0.5
 	projectiles.append(proj)
@@ -183,12 +239,20 @@ func _enemy_center() -> Vector2:
 func _advance_projectiles(delta: float) -> void:
 	if projectiles.is_empty():
 		return
+	# Hedef öldü/yok: uçan mermileri temizle (freed node'a nişan alıp çökme).
+	if not is_instance_valid(enemy) or not enemy_health.is_alive():
+		for proj in projectiles:
+			proj.queue_free()
+		projectiles = []
+		return
 	var target := _enemy_center()
 	for proj in projectiles.duplicate():
 		var center: Vector2 = proj.global_position + proj.size * 0.5
 		var to := target - center
 		if to.length() <= PROJ_SPEED * delta + 4.0:
-			print("Mermi rakibe isabet etti")
+			var dmg: int = proj.get_meta("damage", 0)
+			enemy_health.take_damage(dmg)
+			print("Mermi isabet -> %d hasar (düşman kalan %d)" % [dmg, enemy_health.hp])
 			projectiles.erase(proj)
 			proj.queue_free()
 		else:

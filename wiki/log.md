@@ -19,6 +19,18 @@ Types: `fix`, `feature`, `refactor`, `disable`, `config`, `document`
 
 ---
 
+## [2026-09-07] fix | Oyuncu kendiliğinden hasar alıyordu (düşman auto-attack kaldırıldı)
+- Files changed: `scripts/main.gd`
+- Bug: düşmana vurunca oyuncu da hasar yiyor görünüyordu. Gerçek sebep: `_enemy_attack` her 2sn oyuncuya pasif 8 hasar veriyordu (bir önceki commit'te eklenmişti), rün çizimiyle çakışınca "vurunca ben de yiyorum" algısı.
+- `_enemy_attack`, `ENEMY_ATTACK_DAMAGE/INTERVAL`, `enemy_attack_left` kaldırıldı. `player_health` + bar duruyor — gerçek düşman saldırısı tasarlanınca `take_damage()` tekrar bağlanacak. → [[Can ve Hasar Sistemi]]
+
+## [2026-09-07] feature | Can + hasar sistemi (health bars, ölüm)
+- Files changed: `scripts/health.gd` (yeni), `scripts/health_bar.gd` (yeni), `scripts/main.gd`
+- Yeniden kullanılabilir bileşenler: `Health` (HP durumu + `damaged`/`died` sinyalleri), `HealthBar` (greybox yeşil→kırmızı dolum çubuğu, birimin üstünde). Global `class_name` yerine `preload` — headless çalıştırmada global class cache stale olduğu için parse hatası veriyordu.
+- Player + Enemy'ye 100 HP. Mermi isabeti düşmana rüne göre hasar (line 10, O 15, V 20, X 25, Yıldırım 30). Düşman her 2sn oyuncuya 8 hasar (`_enemy_attack`) → oyuncu HP'si de gerçek.
+- Ölüm: düşman ölünce görsel+bar free + uçan mermiler temizlenir (freed node'a nişan alıp çökme guard'ı); oyuncu ölünce `game_over` → girdi + process durur.
+- Godot 4.7.2'de çalıştırıldı, parse temiz, oyuncu HP düştüğü + bar güncellendiği doğrulandı. → [[Can ve Hasar Sistemi]]
+
 ## [2026-09-07] fix | Rün algılama gecikmesi azaltıldı (erken commit)
 - Files changed: `scripts/main.gd`
 - `COMMIT_DELAY` 0.35 → 0.22s.
