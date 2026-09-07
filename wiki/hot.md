@@ -11,7 +11,7 @@ verified: 2026-09-07
 > Any product/build-state claim below older than 14 days is a **hypothesis, not a fact** (see Staleness Contract in `CLAUDE.md`). Verify against code, graph, or the running build before acting, then bump `verified:`.
 
 ## Last Updated
-2026-09-07 — Oyun fikri **onaylandı: Rün Büyücüsü**. Tasarım notları wiki'ye işlendi, prototip planlandı.
+2026-09-07 — **4 rün tanıma çalışıyor + hızlı** (`scripts/main.gd`): düz çizgi(temel), X, O, Yıldırım, V → her biri farklı renk mermi, Player→Enemy. O/V/Yıldırım anında commit; düz çizgi/X 0.22s bekler (X 2 stroke). Hasar/can yok, logic + renk. Greybox ColorRect.
 
 ## Key Recent Facts
 - **Rün Büyücüsü** — dikey 2D dalga savunması. Alt-orta sabit kareye rün çizilir → soldaki büyücü sağdaki düşmana fırlatır. Rünler zincirlenip kombo yapar. → [[Rün Büyücüsü — Konsept]]

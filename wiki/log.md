@@ -19,6 +19,41 @@ Types: `fix`, `feature`, `refactor`, `disable`, `config`, `document`
 
 ---
 
+## [2026-09-07] fix | Rün algılama gecikmesi azaltıldı (erken commit)
+- Files changed: `scripts/main.gd`
+- `COMMIT_DELAY` 0.35 → 0.22s.
+- Erken commit: tek stroke ve düz çizgi değilse (O/V/Yıldırım) X olamaz → anında tetiklenir, beklemez. Sadece düz çizgi (X'in ilk yarısı olabilir) ve X `COMMIT_DELAY` bekler.
+- Bol test edildi, 5 rün de doğru + hızlı. Hasar/can hâlâ yok.
+
+## [2026-09-07] feature | 4 rün tanıma: X / O / Yıldırım / V + renkli mermi
+- Files changed: `scripts/main.gd`, `scenes/main.tscn`
+- Stroke sınıflandırma eklendi. Çok-stroke tampon + `COMMIT_DELAY=0.35s` (X iki çizgi olduğu için). Kalem kalkınca commit sayacı, süre bitince `_classify`.
+- Kurallar: kesişen ≥2 stroke → **X**; kapalı (baş-son/yol < 0.30) → **O**; köşe sayısı (dönüş >55°) 0 → düz çizgi (temel), 1 → **V**, ≥2 → **Yıldırım**. Resample 24 nokta, min uzunluk 60px.
+- Her rün farklı renk mermi: düz=beyaz, X=kırmızı, O=camgöbeği, Yıldırım=sarı, V=yeşil. Hareket/hasar aynı — şimdilik sadece renkle ayrım (kullanıcı isteği).
+- Rün slotları rünlere hizalandı ve isimlendi (RuneSlotX/O/Lightning/V), renkleri mermiyle eşleşiyor.
+- Geometry2D.segment_intersects_segment ile kesişim. Hasar/can hâlâ yok.
+
+## [2026-09-07] feature | Düz vuruş: çizgi algılama + mermi logic
+- Files changed: `scripts/main.gd` (yeni), `scenes/main.tscn`
+- İlk oyun özelliği. DrawCanvas içinde herhangi yönde düz çizgi çizilince "düz vuruş" tetiklenir → Player'dan Enemy'ye ColorRect mermi gider, isabette yok olur. → [[Düz Çizgi]]
+- Çizgi algılama: stroke noktaları toplanır, ilk-son nokta doğrusuna max dik sapma / uzunluk ≤ 0.18 ve uzunluk ≥ 60px → düz. Aksi halde vuruş yok (sessiz değil, print'liyor → [[Sessiz Başarısızlık Yok]]).
+- Hasar/can YOK — sadece logic. İsabet `print` ile görünüyor. Test: 3/3 çizgi→mermi→isabet çalıştı.
+- tscn: root'a `main.gd`, BattleArea/DrawArea/DrawCanvas'a `mouse_filter=2` (girişi yutmasın, `_unhandled_input`'a geçsin).
+
+## [2026-09-07] refactor | Demo düzeni: büyük çizim alanı + rün slotları + boyut ölçeği
+- Files changed: `scenes/main.tscn`
+- Çizim/etkileşim alanı büyütüldü: savaş üst 0→1000, çizim alanı 1000→1920 (~48%).
+- Player küçültüldü (90×180 — normal büyücü); Enemy tank olarak büyük kaldı (150×300). Boyut = tehdit ölçeği.
+- Çizim alanına: sol büyük DrawCanvas (600×600) + sağda 4 RuneSlot (130×130). Slot renkleri: beyaz/sarı/yeşil/mor (rün formu yok, sadece renk placeholder).
+- Godot 4.7.2'de temiz çalıştı, hata yok.
+
+## [2026-09-07] feature | Demo sahnesi (rectangle greybox) kuruldu
+- Files changed: `scenes/main.tscn` (yeni), `project.godot`
+- İlk oynanabilir greybox: assetsiz, sadece ColorRect'ler. Dikey 1080x1920.
+- Düzen: üst 2/3 (0→1280) savaş alanı — solda Player (mavi), sağda Enemy (kırmızı), zemin çizgisi y=1280. Alt 1/3 (1280→1920) rün çizim alanı ([[Ekran Düzeni]]).
+- `run/main_scene="res://scenes/main.tscn"` set. Godot 4.7.2'de temiz çalıştı, hata yok.
+- Script yok — sonraki sprint: düşman scripti + çizim girişi.
+
 ## [2026-09-07] config | godot-mcp (editor control) eklendi
 - Files changed: `.mcp.json`, `wiki/decisions/engine-godot.md`
 - `godot` MCP (Coding-Solo/godot-mcp, npx @coding-solo/godot-mcp) projeye eklendi — Godot editörünü kontrol eder (sahne çalıştır, hata oku).
