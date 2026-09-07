@@ -2,7 +2,7 @@
 type: meta
 title: "Hot Cache"
 updated: 2026-09-07
-verified: 2026-09-07  # can/hasar sistemi eklendi
+verified: 2026-09-07  # tank melee düşman eklendi
 ---
 
 # Recent Context
@@ -11,8 +11,8 @@ verified: 2026-09-07  # can/hasar sistemi eklendi
 > Any product/build-state claim below older than 14 days is a **hypothesis, not a fact** (see Staleness Contract in `CLAUDE.md`). Verify against code, graph, or the running build before acting, then bump `verified:`.
 
 ## Last Updated
-2026-09-07 — **Can + hasar sistemi çalışıyor**. Yeniden kullanılabilir `Health` + `HealthBar` bileşenleri (preload, `class_name` değil). Player/Enemy 100 HP, üstlerinde greybox can çubuğu (yeşil→kırmızı). Mermi düşmana rüne göre hasar (10–30). **Oyuncu henüz hasar almıyor** — düşman auto-attack denendi, bug yaptı (vurunca oyuncu da yiyor), kaldırıldı; gerçek düşman saldırısı bekliyor. Ölüm: düşman free / oyuncu game_over hazır. Godot 4.7.2 doğrulandı. → [[Can ve Hasar Sistemi]]
-(önceki: 4 rün tanıma + renkli mermi, `scripts/main.gd`.)
+2026-09-07 — **Tank melee düşman çalışıyor**. Yeniden kullanılabilir `Enemy` node'u (`scripts/enemy.gd`, preload + `setup`/`tick`, health.gd pattern'i). Gövdeyi oyuncuya doğru yürütür, menzile girince melee vurur. Tank profili: HP 400, hasar 5, hız 45 px/sn, cooldown 1.4 sn. Oyuncu artık gerçekten hasar alıyor; saldırı yalnız menzilde (eski uzaktan-hasar bug'ı yok). Can çubuğu yürüyen tankı takip eder. run_project ile test: yürüdü/vurdu/400 HP'de öldü, hata yok. → [[Düşman Tasarımı]], [[Can ve Hasar Sistemi]]
+(önceki: `Health`+`HealthBar` bileşenleri, 100 HP, mermi hasarı 10–30; 4 rün tanıma + renkli mermi.)
 
 ## Key Recent Facts
 - **Rün Büyücüsü** — dikey 2D dalga savunması. Alt-orta sabit kareye rün çizilir → soldaki büyücü sağdaki düşmana fırlatır. Rünler zincirlenip kombo yapar. → [[Rün Büyücüsü — Konsept]]
@@ -22,6 +22,7 @@ verified: 2026-09-07  # can/hasar sistemi eklendi
 - **Düz çizgi** = temel saldırı + başarısızlık tabanı + komboyu taşır.
 - Tanıma: **$1 recognizer** aday (araştırılacak). Karışma matrisine göre rün ayır.
 - **Can/hasar var** (`scripts/health.gd`, `health_bar.gd`): tekrar kullanılır `Health`/`HealthBar`. Kombo hasar çarpanı + juice + dalga henüz yok. → [[Can ve Hasar Sistemi]]
+- **Tank düşman var** (`scripts/enemy.gd`): yürü + menzilde melee. Stat override ile başka arketipler (swarm) aynı node'dan. Spawn/dalga + silüetten zaaf okuma eksik. → [[Düşman Tasarımı]]
 
 ## Open Tasks
 - [[Prototip M0]] yap: 4 rün + düz çizgi, tek dalga, swarm+tank, ~30 sn. Telefonda, tek elle.

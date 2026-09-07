@@ -19,6 +19,13 @@ Types: `fix`, `feature`, `refactor`, `disable`, `config`, `document`
 
 ---
 
+## [2026-09-07] feature | Tank melee düşman (yürü + menzilde saldır)
+- Files changed: `scripts/enemy.gd` (yeni), `scripts/main.gd`
+- Yeniden kullanılabilir `Enemy` davranış node'u (`preload`, `class_name` yok — health.gd pattern'i). `setup(body, target, target_health, self_health)` + `tick(delta)`. Gövdeyi hedefe doğru yatay yürütür; kenar-kenar mesafe `attack_range` altına inince `attack_cooldown` ile melee vurur.
+- Tank profili: HP 400 (`ENEMY_MAX_HP`, ~13-40 rün vuruşu), hasar 5, hız 45 px/sn, menzil 24 px, cooldown 1.4 sn — bol can, düşük hasar/hız.
+- Önceki auto-attack bug'ı çözüldü: saldırı artık yalnız menzilde tetikleniyor (uzaktan hasar yok). Oyuncu artık gerçekten hasar alıyor → `player_health.take_damage` + `_on_player_died` bağlandı.
+- `_place_bar()` helper çıkarıldı; tank yürüdükçe can çubuğu her frame gövdeyi takip ediyor. Test: run_project ile tank yürüdü, vurdu, 400 HP'de öldü, hata yok. → [[Düşman Tasarımı]], [[Can ve Hasar Sistemi]]
+
 ## [2026-09-07] fix | Oyuncu kendiliğinden hasar alıyordu (düşman auto-attack kaldırıldı)
 - Files changed: `scripts/main.gd`
 - Bug: düşmana vurunca oyuncu da hasar yiyor görünüyordu. Gerçek sebep: `_enemy_attack` her 2sn oyuncuya pasif 8 hasar veriyordu (bir önceki commit'te eklenmişti), rün çizimiyle çakışınca "vurunca ben de yiyorum" algısı.

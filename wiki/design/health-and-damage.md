@@ -32,9 +32,9 @@ code_anchors:
 
 ## Değerler (verified 2026-09-07)
 
-- Player HP: 100 · Enemy HP: 100
+- Player HP: 100 · Enemy HP: 400 (tank, `ENEMY_MAX_HP`)
 - Rün mermi hasarı: line 10, O 15, V 20, X 25, Yıldırım 30 (`RUNE_DAMAGE`)
-- **Oyuncu hasar kaynağı yok** (henüz). Düşman auto-attack denendi ama "vurunca ben de yiyorum" bug'ına yol açtı, kaldırıldı. Player bar duruyor, gerçek düşman saldırısı bekliyor.
+- **Oyuncu artık hasar alıyor:** tank melee düşman menzilde 5 hasar/vuruş (1.4 sn cooldown) → `player_health.take_damage`. Menzil kontrollü, eski uzaktan-hasar bug'ı yok. → [[Düşman Tasarımı]]
 
 ## Akış
 
@@ -44,8 +44,7 @@ code_anchors:
 
 ## Açık / eksik
 
-- **Oyuncu henüz hiç hasar almıyor** — düşmanın gerçek saldırı davranışı tasarlanmalı (menzil, animasyon, sıklık) → [[Düşman Tasarımı]]. Bağlanınca `player_health.take_damage()` + `_on_player_died` zaten hazır.
-- Tek düşman (punching bag). Dalga/spawn yok → [[Prototip M0]], [[Düşman Tasarımı]].
+- Tek düşman (tek tank). Dalga/spawn yok → [[Prototip M0]], [[Düşman Tasarımı]].
 - Ölümde restart/game-over ekranı yok, sadece durur.
 - Kombo hasar çarpanı yok → [[Kombo ve Palet]].
 - Juice yok (hasar flash, sarsıntı, sayı) → [[Juice ve Geri Bildirim]].

@@ -10,6 +10,7 @@ extends Node2D
 
 const HealthScript = preload("res://scripts/health.gd")
 const HealthBarScript = preload("res://scripts/health_bar.gd")
+const EnemyScript = preload("res://scripts/enemy.gd")
 
 @onready var player: ColorRect = $BattleArea/Player
 @onready var enemy: ColorRect = $BattleArea/Enemy
@@ -23,7 +24,7 @@ const CLOSED_RATIO := 0.30     # kapalı şekil: baş-son mesafe / yol uzunluğu
 
 # Can / hasar
 const PLAYER_MAX_HP := 100
-const ENEMY_MAX_HP := 100
+const ENEMY_MAX_HP := 400   # tank: bol HP, öldürmesi zor (~13-40 rün vuruşu)
 # Rüne göre mermi hasarı
 const RUNE_DAMAGE := {"line": 10, "X": 25, "O": 15, "lightning": 30, "V": 20}
 
@@ -44,6 +45,7 @@ var player_health
 var enemy_health
 var player_bar
 var enemy_bar
+var enemy_ai
 var game_over := false
 
 func _ready() -> void:
@@ -55,6 +57,12 @@ func _ready() -> void:
 	enemy_health.damaged.connect(func(_a, _h): enemy_bar.set_ratio(enemy_health.ratio()))
 	player_health.died.connect(_on_player_died)
 	enemy_health.died.connect(_on_enemy_died)
+	# Tank düşman: yürür + menzilde melee vurur. Stat'lar enemy.gd @export
+	# varsayılanları (yavaş hız / düşük hasar); HP yukarıda ENEMY_MAX_HP.
+	enemy_ai = EnemyScript.new()
+	enemy.add_child(enemy_ai)
+	enemy_ai.setup(enemy, player, player_health, enemy_health)
+	enemy_ai.attacked.connect(func(dmg): print("Tank vurdu -> %d hasar (oyuncu kalan %d)" % [dmg, player_health.hp]))
 
 func _make_health(unit: ColorRect, max_hp: int):
 	var h = HealthScript.new()
@@ -65,11 +73,17 @@ func _make_health(unit: ColorRect, max_hp: int):
 func _make_bar(unit: ColorRect):
 	var bar = HealthBarScript.new()
 	add_child(bar)
+	_place_bar(bar, unit)
+	return bar
+
+# Çubuğu birimin tam üstüne ortalar (birim hareket edince her frame çağrılır).
+func _place_bar(bar, unit: ColorRect) -> void:
+	if bar == null or not is_instance_valid(bar) or not is_instance_valid(unit):
+		return
 	var r := unit.get_global_rect()
 	bar.global_position = Vector2(
 		r.position.x + r.size.x * 0.5 - HealthBarScript.WIDTH * 0.5,
 		r.position.y - HealthBarScript.HEIGHT - 8.0)
-	return bar
 
 func _unhandled_input(event: InputEvent) -> void:
 	if game_over:
@@ -101,6 +115,9 @@ func _process(delta: float) -> void:
 		if commit_left <= 0.0:
 			commit_left = -1.0
 			_commit()
+	if enemy_ai != null and is_instance_valid(enemy):
+		enemy_ai.tick(delta)
+		_place_bar(enemy_bar, enemy)  # tank yürüdükçe can çubuğu takip etsin
 	_advance_projectiles(delta)
 
 # --- Can / hasar ---
