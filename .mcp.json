@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "godot-docs": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/Users/ahmetbilalozgun/.local/godot-docs-mcp/node_modules/@nuskey8/godot-docs-mcp/script/index.js"
+      ],
+      "env": {}
+    },
+    "godot": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@coding-solo/godot-mcp"
+      ],
+      "env": {
+        "GODOT_PATH": "/Users/ahmetbilalozgun/Downloads/Godot.app/Contents/MacOS/Godot"
+      }
+    }
+  }
+}

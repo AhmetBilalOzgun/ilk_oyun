@@ -19,6 +19,17 @@ Types: `fix`, `feature`, `refactor`, `disable`, `config`, `document`
 
 ---
 
+## [2026-09-07] config | godot-mcp (editor control) eklendi
+- Files changed: `.mcp.json`, `wiki/decisions/engine-godot.md`
+- `godot` MCP (Coding-Solo/godot-mcp, npx @coding-solo/godot-mcp) projeye eklendi — Godot editörünü kontrol eder (sahne çalıştır, hata oku).
+- GODOT_PATH = `/Users/ahmetbilalozgun/Downloads/Godot.app/Contents/MacOS/Godot` (Godot 4.7.2 stable). Restart gerektirir.
+- NOT: Godot.app Downloads'ta — /Applications'a taşınırsa GODOT_PATH kırılır, güncellenmeli.
+
+## [2026-09-07] config | Engine kararı Godot + godot-docs MCP eklendi
+- Files changed: `.mcp.json`, `wiki/decisions/engine-godot.md`, `wiki/decisions/_index.md`, `wiki/overview.md`
+- Oyun motoru Godot olarak karara bağlandı ([[Engine — Godot]]). Dil: GDScript.
+- `godot-docs` MCP (npx @nuskey8/godot-docs-mcp) projeye eklendi — restart gerektirir.
+
 ## [2026-09-07] document | Rün Büyücüsü fikri onaylandı, tasarım notları işlendi
 - Files changed: `wiki/overview.md`, `wiki/index.md`, `wiki/hot.md`, `wiki/design/**` (6 yeni sayfa + _index), `wiki/decisions/**` (4 yeni sayfa + _index), `wiki/deliverables/**` (Prototip M0 + _index), `wiki/entities/one-dollar-recognizer.md`
 - Beyin fırtınası sonucu karara bağlanan oyun fikri (dikey 2D rün-çizme dalga savunması) tam olarak wiki'ye yazıldı: konsept, ekran düzeni, çizim mekaniği, kombo/palet, düşman tasarımı, juice, oturum yapısı.

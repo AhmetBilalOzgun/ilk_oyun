@@ -19,7 +19,7 @@ Master catalog. Update on every ingest.
 ## Decisions
 
 - [[Decisions Index]] — active decisions + key technical facts
-- [[Loadout Kısıtı]] · [[Sessiz Başarısızlık Yok]] · [[Zaaf Bonustur, Kapı Değil]] · [[Para Kazanma — Açık]]
+- [[Engine — Godot]] · [[Loadout Kısıtı]] · [[Sessiz Başarısızlık Yok]] · [[Zaaf Bonustur, Kapı Değil]] · [[Para Kazanma — Açık]]
 
 ## Deliverables
 

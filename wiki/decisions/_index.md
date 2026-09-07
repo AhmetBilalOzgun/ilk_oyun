@@ -31,6 +31,7 @@ Key design, technical, and project decisions with rationale and date.
 
 ## Key Technical Decisions
 
+- **Engine: Godot** (GDScript) → [[Engine — Godot]]
 - Çizim tanıma: $1 recognizer aday (araştırılacak) → [[Çizim Tanıma — $1 Recognizer]]
 
 ## Superseded

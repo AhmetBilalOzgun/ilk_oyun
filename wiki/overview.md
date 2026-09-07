@@ -30,8 +30,8 @@ Düşman dalgası gelir → oyuncu düşmanın silüetine göre rün çizer → 
 
 ## Tech Stack
 
-- **Engine:** _(TBD)_
-- **Language:** _(TBD)_
+- **Engine:** **Godot** → [[Engine — Godot]]
+- **Language:** GDScript (varsayılan; C# opsiyon)
 - **Platform:** Mobil (dikey, tek el). Küçük indirme + düşük cihaz hedefi.
 - **Çizim tanıma:** $1 recognizer aday → [[Çizim Tanıma — $1 Recognizer]]
 
