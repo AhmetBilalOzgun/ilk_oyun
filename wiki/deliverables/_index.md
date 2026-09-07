@@ -1,8 +1,8 @@
 ---
 type: meta
 title: "Deliverables Index"
-updated: 2026-09-06
-verified: 2026-09-06
+updated: 2026-09-07
+verified: 2026-09-07
 tags:
   - deliverables
 ---
@@ -13,4 +13,4 @@ Milestones, builds, releases, status.
 
 ## Pages
 
-_(empty)_
+- [[Prototip M0]] — 4 rün + düz çizgi, tek dalga, 2 düşman, ~30 sn (planned)

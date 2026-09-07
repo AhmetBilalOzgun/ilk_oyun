@@ -1,8 +1,8 @@
 ---
 type: meta
 title: "Wiki Index"
-updated: 2026-09-06
-verified: 2026-09-06
+updated: 2026-09-07
+verified: 2026-09-07
 ---
 
 # Wiki Index
@@ -11,15 +11,20 @@ Master catalog. Update on every ingest.
 
 ## Design
 
-_(empty — file game design, mechanics, systems here)_
+- [[Design Index]]
+- [[Rün Büyücüsü — Konsept]] — genel konsept
+- [[Ekran Düzeni]] · [[Rün Çizim Mekaniği]] · [[Kombo ve Palet]] · [[Düşman Tasarımı]]
+- [[Juice ve Geri Bildirim]] · [[Oturum Yapısı ve Başarısızlık]]
 
 ## Decisions
 
 - [[Decisions Index]] — active decisions + key technical facts
+- [[Loadout Kısıtı]] · [[Sessiz Başarısızlık Yok]] · [[Zaaf Bonustur, Kapı Değil]] · [[Para Kazanma — Açık]]
 
 ## Deliverables
 
-_(empty — milestones, builds, releases)_
+- [[Deliverables Index]]
+- [[Prototip M0]] — ilk telefon prototipi
 
 ## Concepts
 
@@ -28,6 +33,7 @@ _(empty — frameworks, patterns, ideas)_
 ## Entities
 
 - [[Entities Index]] — people, tools, engines, third-party
+- [[Çizim Tanıma — $1 Recognizer]] — aday tanıma teknolojisi
 
 ## Code
 
@@ -54,4 +60,4 @@ Every page carries `verified: YYYY-MM-DD`. **Older than 14 days = hypothesis, no
 
 ## Sources
 
-_(empty — ingest raw sources into `.raw/`, then "ingest [filename]")_
+- [[Rün Büyücüsü — Tasarım Notları (kaynak)]] — beyin fırtınası, 2026-09-07
