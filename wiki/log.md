@@ -19,6 +19,48 @@ Types: `fix`, `feature`, `refactor`, `disable`, `config`, `document`
 
 ---
 
+## [2026-09-07] feature | Çizim izi (canlı trail juice)
+
+- Files changed: `scripts/rune_trail.gd` (yeni), `scripts/main.gd`
+- **Canlı iz:** parmak çizerken stroke'ların arkasında parlak mavi hat + uç noktasında nokta. "Ben yaptım" hissini güçlendirir, [[Rün Çizim Mekaniği]] "çizerken önizleme" kolonunu karşılar.
+- `RuneTrail` ayrı `Node2D`, ana sahnenin EN SON child'ı olarak eklenir → `_draw` DrawCanvas ColorRect'inin üstüne çizer (parent Node2D `_draw` child'ların arkasında kalırdı). main her frame `set_live()` iter.
+- **Vazgeçilen:** rün hayaleti (commit'te çizilen şeklin ekranda solması) — tasarımcı kararıyla iptal, kod eklenmedi/geri alındı. İlgili: [[Kombo ve Palet]]
+
+---
+
+## [2026-09-07] feature | Ekranda Overdrive şarj tuşu
+
+- Files changed: `scripts/charge_button.gd` (yeni), `scripts/main.gd`
+- Çizim karesinin **hemen sağında** dokunmatik şarj tuşu. Dolum **alttan yukarı** dolar (ne kadar kaldığı görünür), yüzde yazar; dolunca altın renge döner, kenarlık nabız gibi parlar, "BAS!" yazar.
+- Dokunuş YALNIZ halka doluyken dinlenir (spec kuralı) → `triggered` sinyali → `_trigger_overdrive()`. Sağ tık masaüstü kolaylığı olarak korundu; ikisi de aynı helper'dan geçer.
+- `ChargeMeter.ratio()/is_full()` canlı okunur; `Control` + `_draw`, konumu `canvas.get_global_rect()`'ten hesaplanır (tscn'e dokunulmadı). İlgili: [[Kombo ve Palet]]
+
+---
+
+## [2026-09-07] feature | Çok düşmanlı dalga (kombo/zincir test için)
+
+- Files changed: `scripts/main.gd`
+- Tek düşman → **5 düşmanlı karışık dalga** (`ENEMY_PROFILES`): 2 tank (HP 400) + 1 orta + 2 swarm (HP 150, hızlı). İlk profil sahne `Enemy` node'unu kullanır, kalanları koddan spawn.
+- Her düşmanın **ayrı zaafı** (Burn/Freeze/Shatter/Push) → zaaf %40 kuralı ve renk seçimi canlı test edilebilir. Mermiler **en yakın canlı** düşmanı hedefler (`_nearest_enemy`), isabette o düşmanın zaafı uygulanır.
+- Enemy AI/Health/HealthBar giriş başına ayrı; ölüm sinyali `_on_enemy_died.bind(entry)`. Her ölüm zinciri artırır → çok düşmanla zincir sayacı gerçekten test edilir.
+- Test: 56/56 geçti, oyun 150 kare headless temiz. İlgili: [[Düşman Tasarımı]], [[Kombo ve Palet]]
+
+---
+
+## [2026-09-07] feature | Kombo sistemi çekirdeği + motor entegrasyonu
+
+- Files changed: `data/combo_config.json` (yeni), `scripts/core/{rune_db,combo_resolver,resolved_spell,combo_state_machine,time_scale_controller,charge_meter,chain_tracker,damage_rules,rune_recognizer}.gd` (yeni), `scripts/{recognizer_adapter,debug_overlay}.gd` (yeni), `tests/{run_tests,test_resolver,test_state_machine,test_meters}.gd` (yeni), `scripts/main.gd` (yeniden yazıldı)
+- **İki katman:** çekirdek saf `RefCounted` (motordan bağımsız, `unscaled_dt` alır, headless test edilebilir); motor tarafı adaptör (`main.gd`) girdi + `Time.get_ticks_usec` ölçeklenmemiş dt + `Engine.time_scale` uygular.
+- **Kritik kısıt çözüldü:** kombo/pencere/casting/overdrive süreleri duvar saatinden ölçülür → `Engine.time_scale`'den bağımsız. Dünya yavaşlarken pencere yavaşlamaz (çift avantaj yok). Test bunu kanıtlıyor (en önemli test).
+- **ComboResolver saf/deterministik:** taşıyıcı=ilk rün, etkiler union+füzyon tablosu, hasar=taban×1.6^(ek rün). Strike = tanınmayan çizim tabanı (null→strike), etkisiz ama komboyu taşır. Zaaf = %40 (sıfır değil, `DamageRules`).
+- **Overdrive:** aynı ComboResolver, biriken rünler tek çıktı + hasar çarpanı. Şarj isabetten dolar, taşma birikmez.
+- **Zincir & kombo bağımsız** iki sayaç. Debug overlay (F1) canlı okur.
+- Tuning tek dosyada: `data/combo_config.json` (rün seti, füzyon, timeScale/pencere merdiveni, şarj, overdrive).
+- Testler: `godot --headless -s res://tests/run_tests.gd` → 56 geçti, 0 kaldı. Oyun 90+ kare headless, script hatası yok.
+- İlgili: [[Kombo ve Palet]], [[Zaaf Bonustur, Kapı Değil]], [[Rün Çizim Mekaniği]]
+
+---
+
 ## [2026-09-07] feature | Tank melee düşman (yürü + menzilde saldır)
 - Files changed: `scripts/enemy.gd` (yeni), `scripts/main.gd`
 - Yeniden kullanılabilir `Enemy` davranış node'u (`preload`, `class_name` yok — health.gd pattern'i). `setup(body, target, target_health, self_health)` + `tick(delta)`. Gövdeyi hedefe doğru yatay yürütür; kenar-kenar mesafe `attack_range` altına inince `attack_cooldown` ile melee vurur.

@@ -1,0 +1,23 @@
+{
+  "runes": {
+    "ember":  {"carrier": "Projectile", "effect": "Burn",    "base_damage": 20},
+    "frost":  {"carrier": "Cone",       "effect": "Freeze",  "base_damage": 18},
+    "gale":   {"carrier": "Wave",       "effect": "Push",    "base_damage": 15},
+    "storm":  {"carrier": "Area",       "effect": "Shatter", "base_damage": 24},
+    "strike": {"carrier": "Projectile", "effect": null,      "base_damage": 10}
+  },
+  "fusions": [
+    {"pair": ["Burn", "Freeze"], "result": "Steam"},
+    {"pair": ["Push", "Shatter"], "result": "Vacuum"}
+  ],
+  "combo_multiplier_per_rune": 1.6,
+  "time_scale_ladder": {"1": 1.0, "2": 0.50, "3": 0.40, "4": 0.30, "overdrive": 0.10},
+  "window_ladder_sec": {"1": 0.60, "2": 0.40, "3": 0.20},
+  "combo_chain_gap_sec": 0.30,
+  "casting_cap_sec": 1.2,
+  "charge": {"hits_to_fill": 30},
+  "overdrive": {"duration_sec": 1.5, "damage_multiplier": 2.0},
+  "chain": {"break_on": "damage"},
+  "weakness_wrong_effect_multiplier": 0.40,
+  "shape_to_rune": {"line": "strike", "X": "ember", "O": "frost", "lightning": "gale", "V": "storm"}
+}

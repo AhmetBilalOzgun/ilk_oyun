@@ -2,7 +2,7 @@
 type: meta
 title: "Hot Cache"
 updated: 2026-09-07
-verified: 2026-09-07  # tank melee düşman eklendi
+verified: 2026-09-07  # çizim izi + rün hayaleti eklendi
 ---
 
 # Recent Context
@@ -11,6 +11,14 @@ verified: 2026-09-07  # tank melee düşman eklendi
 > Any product/build-state claim below older than 14 days is a **hypothesis, not a fact** (see Staleness Contract in `CLAUDE.md`). Verify against code, graph, or the running build before acting, then bump `verified:`.
 
 ## Last Updated
+2026-09-07 — **Çizim juice eklendi** (`scripts/rune_trail.gd`): canlı iz (parmak arkasında parlak hat + uç noktası). `RuneTrail` Node2D en son child → DrawCanvas üstüne çizer; main `set_live()` besler. "Çizerken önizleme" kolonunu karşılar. (Rün hayaleti fikri denendi, tasarımcı kararıyla iptal edildi.)
+(önceki: **Kombo sistemi çekirdeği çalışıyor**.)
+
+### (arşiv) Kombo sistemi çekirdeği
+2026-09-07 — **Kombo sistemi çekirdeği çalışıyor**. İki katman: saf `RefCounted` çekirdek (`scripts/core/`, motordan bağımsız, `unscaled_dt` alır) + motor adaptörü (`main.gd`). Sınıflar: `ComboResolver` (saf: taşıyıcı=ilk rün, etki union+füzyon, hasar ×1.6/rün), `ComboStateMachine` (Idle→Casting→Window, overdrive), `ChargeMeter`, `ChainTracker`, `TimeScaleController`, `RuneDB`, `DamageRules`. **Kritik:** tüm kombo zamanlaması duvar saatinden (`Time.get_ticks_usec`) → `Engine.time_scale`'den bağımsız (pencere yavaşlamaz). Tuning: `data/combo_config.json`. Recognizer null→strike. Debug overlay F1. Test: `godot --headless -s res://tests/run_tests.gd` → 56/56 geçti. → [[Kombo ve Palet]]
+(önceki: **Tank melee düşman** — `scripts/enemy.gd`, yürü+menzilde melee, HP 400.)
+
+### (arşiv) Tank melee düşman
 2026-09-07 — **Tank melee düşman çalışıyor**. Yeniden kullanılabilir `Enemy` node'u (`scripts/enemy.gd`, preload + `setup`/`tick`, health.gd pattern'i). Gövdeyi oyuncuya doğru yürütür, menzile girince melee vurur. Tank profili: HP 400, hasar 5, hız 45 px/sn, cooldown 1.4 sn. Oyuncu artık gerçekten hasar alıyor; saldırı yalnız menzilde (eski uzaktan-hasar bug'ı yok). Can çubuğu yürüyen tankı takip eder. run_project ile test: yürüdü/vurdu/400 HP'de öldü, hata yok. → [[Düşman Tasarımı]], [[Can ve Hasar Sistemi]]
 (önceki: `Health`+`HealthBar` bileşenleri, 100 HP, mermi hasarı 10–30; 4 rün tanıma + renkli mermi.)
 
@@ -34,4 +42,4 @@ verified: 2026-09-07  # tank melee düşman eklendi
 ## Kararı Verilmeyen (tahmin üretme)
 - Para kazanma modeli ([[Para Kazanma — Açık]]) — beceri↔ödeme çelişkisi çözülmedi.
 - Uzun vadeli çekim/2. oynanış sebebi, ilerleme/meta, geri dönüş kancası, sosyal.
-- Kombo penceresi süresi. 50. dalga kutlama ölçeği. Uzun vadeli dönüşüm planı.
+- 50. dalga kutlama ölçeği. Uzun vadeli dönüşüm planı. (Kombo penceresi süresi artık `data/combo_config.json`'da — prototipte ayarlanacak, mimari karar değil.)

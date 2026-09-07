@@ -12,7 +12,19 @@ domain: system
 related:
   - "[[Rün Çizim Mekaniği]]"
   - "[[Juice ve Geri Bildirim]]"
-code_anchors: []
+code_anchors:
+  - repo: game
+    symbol: ComboResolver.resolve
+    file: scripts/core/combo_resolver.gd
+  - repo: game
+    symbol: ComboStateMachine
+    file: scripts/core/combo_state_machine.gd
+  - repo: game
+    symbol: RuneDB
+    file: scripts/core/rune_db.gd
+  - repo: game
+    symbol: DebugOverlay
+    file: scripts/debug_overlay.gd
 ---
 
 # Kombo ve Palet
@@ -33,7 +45,18 @@ Bir rün **10 kez** başarıyla çizildikten sonra palet o rünün çizgi yolunu
 
 Kombo sistemi kendi kendini öğretir; ustalık görünür ama ödülsüz değil, sessizce kazanılır.
 
+## Uygulama (2026-09-07)
+
+Kombo çekirdeği kodlandı — bkz `code_anchors`. Prensipler:
+
+- **İki katman:** çekirdek saf `RefCounted` (motor zamanı okumaz, `unscaled_dt` alır → headless test). Motor adaptörü `main.gd` girdi + `Engine.time_scale` uygular.
+- **Zaman:** kombo/pencere/casting/overdrive süreleri duvar saatinden (`Time.get_ticks_usec`) ölçülür — `Engine.time_scale`'den bağımsız. Dünya yavaşlarken pencere yavaşlamaz (çift avantaj çökmesi yok).
+- **Birleştirme (elle değil, kurallardan):** taşıyıcı = ilk rün; etkiler union + füzyon tablosu (ör. Burn+Freeze→Steam); hasar = taban × 1.6^(ek rün). Zıt rünler iptal etmez.
+- **Strike** = tanınmayan çizim tabanı (recognizer null → strike), etkisiz ama komboyu taşır.
+- **Overdrive** aynı resolver'ı kullanır (ayrı kod yolu yok): biriken rünler tek çıktı + hasar çarpanı.
+- **Tuning** `data/combo_config.json`'da: rün seti, füzyon, timeScale merdiveni, pencere merdiveni, şarj, overdrive, zaaf çarpanı. Prototipte buradan ayarlanır.
+
 ## Open Questions
 
-- Kombo penceresi süresi (bkz [[Rün Çizim Mekaniği]]).
-- Kombo eşleşme tablosunun ilk seti (4 rün prototipinde hangi eşleşmeler).
+- Palet parlaması/solması UI'ı henüz yok (bu iş çekirdek + overlay; palet görseli sonra).
+- 4 rün prototipinde nihai füzyon eşleşme seti (şu an 2 girdi: Burn+Freeze→Steam, Push+Shatter→Vacuum).
