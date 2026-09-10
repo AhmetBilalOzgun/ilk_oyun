@@ -1,8 +1,8 @@
 ---
 type: meta
 title: "Hot Cache"
-updated: 2026-09-07
-verified: 2026-09-07  # wave sistemi + okçu düşman eklendi
+updated: 2026-09-10
+verified: 2026-09-10  # şarj barlı birleşim becerileri + kombo/füzyon motoru silindi
 ---
 
 # Recent Context
@@ -11,6 +11,15 @@ verified: 2026-09-07  # wave sistemi + okçu düşman eklendi
 > Any product/build-state claim below older than 14 days is a **hypothesis, not a fact** (see Staleness Contract in `CLAUDE.md`). Verify against code, graph, or the running build before acting, then bump `verified:`.
 
 ## Last Updated
+2026-09-10 — **Şarj barlı birleşim becerileri + kombo/füzyon motoru SİLİNDİ** (verified 2026-09-10): Beceri modeli yenilendi. Strike kaldırıldı. Her karakter **3 büyü** = 2 rün-özel NORMAL + 1 **BİRLEŞİM** (ultimate). Birleşim yeni şekil getirmez — kaynak rünler QTE'de **peş peşe** çizilir (Kayra Plazma = ember→storm, Derin Fırtına = frost→gale); tümü doğru → büyük buff (bonus ×2.5). **Şarj barı**: hasar ver+al miktarı kadar dolar (`Combatant.charge`, max 100), dolunca birleşim açılır, kullanınca sıfırlanır. **Durum sistemi**: Plazma yakma DoT (sonraki tur %40 tekrar hasar, `Skill.dot_fraction`), Fırtına stun (`applies_stun`, bir tur atla) — ikisi de `TurnManager._begin_turn`'de sıra başında işlenir. **Kombo/füzyon tamamen silindi**: eski gerçek-zamanlı motor (`main.gd`/`combo_resolver`/`damage_rules`/`resolved_spell`/`debug_overlay`), 3 test suite, tüm `deprecated/`; `RuneDB` sadeleşti (runes+shape_to_rune), `combo_config.json` küçüldü. Test 46/46. → [[Turn-Based Savaş ve QTE]]
+(önceki: **Turn-based RPG'ye dönüşüm**)
+
+2026-09-10 — **Turn-based RPG'ye dönüşüm** (verified 2026-09-10): Gerçek zamanlı dalga savunması → **turn-based parti RPG**. Rün çizimi kalır ama rolü değişti: sürekli kombo DEĞİL, beceri kullanılırken tetiklenen **sınırlı süreli QTE**. Yeni saf çekirdek `scripts/rpg/`: `TurnManager` (IDLE→SELECTING_ACTION→QTE→RESOLVING→NEXT_TURN, `tick(unscaled_dt)`, motordan bağımsız), `Character`/`Skill`/`Enemy` (Resource), `EnemyAI` stub (en düşük HP → en yüksek hasar), `BattleDamage` (fail-soft + hasar asla sıfır), `TurnDebugOverlay`. `RuneDB`/`IRuneRecognizer` yeniden kullanıldı, `FakeRecognizer` eklendi. Demo: `scenes/battle.tscn`. Eski kombo çekirdeği (`ComboStateMachine`/`ChargeMeter`/`ChainTracker`/`TimeScaleController`) → `deprecated/`. Test 79/79. → [[Turn-Based Savaş ve QTE]]
+(önceki: **Yeni sürüm APK telefona kuruldu**)
+
+2026-09-07 — **Yeni sürüm APK telefona kuruldu** (verified 2026-09-07): `build/wizard_game.apk` yeniden export (27MB→37MB, menü+UI assetleri büyüttü), `adb install -r` ile Xiaomi emerald'a kuruldu + launcher intent ile başlatıldı. Toolchain PATH'te değil, sabit yollar: Godot `~/Downloads/Godot.app/Contents/MacOS/Godot`, JDK17 `/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home`, Android SDK `/opt/homebrew/share/android-commandlinetools` (adb = `platform-tools/adb`). Build: `JAVA_HOME=... Godot --headless --path . --export-debug "Android" build/wizard_game.apk`. → log.md
+(önceki: **Ana menü eklendi**)
+
 2026-09-07 — **Ana menü eklendi** (verified 2026-09-07): `scenes/main_menu.tscn` + `scripts/main_menu.gd`. Açılış sahnesi artık menü (`project.godot` main_scene). Başlık + 3 buton (OYNA→oyun, AYARLAR→"yakında" paneli, ÇIKIŞ). Butonlar Kenney UI Pack Pixel Adventure 9-patch tile'ları (`assets/ui/*.png`, StyleBoxTexture). Global texture filter Nearest (pixel-art). → log.md
 (önceki: **İlk Android APK build alındı**)
 
@@ -27,11 +36,13 @@ verified: 2026-09-07  # wave sistemi + okçu düşman eklendi
 (önceki: `Health`+`HealthBar` bileşenleri, 100 HP, mermi hasarı 10–30; 4 rün tanıma + renkli mermi.)
 
 ## Key Recent Facts
+- **YÖN DEĞİŞİKLİĞİ (2026-09-10):** oyun artık **turn-based parti RPG**. Gerçek-zamanlı kombo/dalga motoru **TAMAMEN SİLİNDİ** (`deprecated/` dahil — artık yok). Rün çizimi beceri başına **QTE** olarak kalır. Çekirdek `scripts/rpg/` (`TurnManager`, `Character`/`Skill`/`Enemy`/`Combatant`, `EnemyAI`, `BattleDamage`). Aşağıdaki gerçek-zamanlı satırlar (kombo/dalga/strike/füzyon) **tarihsel — geçersiz**. → [[Turn-Based Savaş ve QTE]]
+- **Beceri modeli (2026-09-10):** her karakter 3 büyü = 2 rün-özel + 1 birleşim (ultimate, şarj barı dolunca; QTE'de kaynak rünler peş peşe). Şarj hasar ver+al ile dolar. Durum: yakma DoT (Plazma) + stun (Fırtına). Strike ve füzyon tablosu KALDIRILDI. → [[Turn-Based Savaş ve QTE]]
 - **Rün Büyücüsü** — dikey 2D dalga savunması. Alt-orta sabit kareye rün çizilir → soldaki büyücü sağdaki düşmana fırlatır. Rünler zincirlenip kombo yapar. → [[Rün Büyücüsü — Konsept]]
 - Fark: girdi = üretim (seçim değil), "ben yaptım" hissi. Reklam = oynanış (dilsiz, 6 sn).
 - **Onaylı kararlar:** sabit çizim karesi ([[Ekran Düzeni]]), savaşa 4 rün ([[Loadout Kısıtı]]), sessiz başarısızlık yok ([[Sessiz Başarısızlık Yok]]), zaaf bonus %40 ([[Zaaf Bonustur, Kapı Değil]]).
 - **Bilişsel yük 4 kolonu:** loadout, çizerken önizleme, sessiz başarısızlık yok, rün formu kısıtları (2–3 çizgi, köşeli, ayrık silüet). → [[Rün Çizim Mekaniği]]
-- **Düz vuruş (strike)** = draw alanına **tık** (kaydırma değil) → anında; başarısızlık tabanı. **STANDALONE**: komboya girmez, depth/pencere açmaz — peş peşe tık sabit taban hasar (kombo yapmaz, mevcut komboyu da bozmaz). Parmak kalkınca **bekleme yok**, rün anında gönderilir (`COMMIT_DELAY` kaldırıldı 2026-09-07). X artık tek-stroke kendini-kesme ile çizilir (iki-stroke değil).
+- **(tarihsel — strike kaldırıldı 2026-09-10)** ~~Düz vuruş (strike) = draw alanına tık → anında taban.~~ Turn-based sistemde strike yok; başarısız QTE zaten fail-soft taban hasar veriyor.
 - Tanıma: **$1 recognizer** aday (araştırılacak). Karışma matrisine göre rün ayır.
 - **Can/hasar var** (`scripts/health.gd`, `health_bar.gd`): tekrar kullanılır `Health`/`HealthBar`. Kombo hasar çarpanı + juice + dalga henüz yok. → [[Can ve Hasar Sistemi]]
 - **Düşman + dalga sistemi var** (`scripts/enemy.gd`, `main.gd`): 3 arketip `ENEMY_TYPES` (tank melee / swarm hızlı-melee / okçu ranged mermi atar). `WAVES` sıralı dalga — temizlenince sonraki spawn, son dalga → `game_won`. Test bölümü: 3 dalga (1t+10s / 3t+2o / 2t+2o+5s). Silüetten zaaf okuma + zafer/yenilgi UI eksik. → [[Düşman Tasarımı]]

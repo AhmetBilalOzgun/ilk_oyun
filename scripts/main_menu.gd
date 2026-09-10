@@ -6,7 +6,7 @@ extends Control
 # Butonların görseli Kenney "UI Pack: Pixel Adventure" 9-patch tile'ları
 # (assets/ui/button_normal.png = ahşap+krem, button_pressed.png = kahve).
 
-const GAME_SCENE := "res://scenes/main.tscn"
+const GAME_SCENE := "res://scenes/battle.tscn"   # turn-based savaş (eski: scenes/main.tscn)
 
 @onready var settings_panel: Control = $SettingsPanel
 
