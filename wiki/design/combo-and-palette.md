@@ -2,30 +2,25 @@
 type: design
 title: "Kombo ve Palet"
 created: 2026-09-07
-updated: 2026-09-07
-verified: 2026-09-07
+updated: 2026-09-10
+verified: 2026-09-10
 tags:
   - design
   - system
-status: approved
+  - historical
+status: deprecated
 domain: system
 related:
+  - "[[Turn-Based Savaş ve QTE]]"
   - "[[Rün Çizim Mekaniği]]"
   - "[[Juice ve Geri Bildirim]]"
-code_anchors:
-  - repo: game
-    symbol: ComboResolver.resolve
-    file: scripts/core/combo_resolver.gd
-  - repo: game
-    symbol: ComboStateMachine
-    file: scripts/core/combo_state_machine.gd
-  - repo: game
-    symbol: RuneDB
-    file: scripts/core/rune_db.gd
-  - repo: game
-    symbol: DebugOverlay
-    file: scripts/debug_overlay.gd
 ---
+
+> [!warning] TARİHSEL — bu sistem SİLİNDİ (2026-09-10)
+> Gerçek-zamanlı kombo/füzyon motoru tamamen kaldırıldı (`ComboResolver`,
+> `ComboStateMachine`, `DebugOverlay` dosyaları yok). Aşağısı yalnız tarihsel
+> tasarım kaydıdır. Güncel savaş: [[Turn-Based Savaş ve QTE]] (birleşim becerisi +
+> şarj barı, füzyon tablosu yok).
 
 # Kombo ve Palet
 
