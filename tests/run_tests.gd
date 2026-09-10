@@ -7,6 +7,8 @@ extends SceneTree
 # state_machine / meters) kaldırıldı. Kalan: turn-based savaş.
 
 const TestTurnManager := preload("res://tests/test_turn_manager.gd")
+const TestRunManager := preload("res://tests/test_run_manager.gd")
+const TestMetaProgress := preload("res://tests/test_meta_progress.gd")
 
 var passed := 0
 var failed := 0
@@ -28,5 +30,9 @@ func eqf(a: float, b: float, msg: String, eps := 0.001) -> void:
 func _initialize() -> void:
 	print("== Turn-based savaş testleri ==")
 	TestTurnManager.run(self)
+	print("== Run omurgası testleri ==")
+	TestRunManager.run(self)
+	print("== Meta ilerleme testleri ==")
+	TestMetaProgress.run(self)
 	print("== Sonuç: %d geçti, %d kaldı ==" % [passed, failed])
 	quit(1 if failed > 0 else 0)

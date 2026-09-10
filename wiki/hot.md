@@ -2,7 +2,7 @@
 type: meta
 title: "Hot Cache"
 updated: 2026-09-10
-verified: 2026-09-10  # şarj barlı birleşim becerileri + kombo/füzyon motoru silindi
+verified: 2026-09-10  # meta ilerleme: home/characters/level select + 2 para + kalıcı kayıt
 ---
 
 # Recent Context
@@ -11,6 +11,15 @@ verified: 2026-09-10  # şarj barlı birleşim becerileri + kombo/füzyon motoru
 > Any product/build-state claim below older than 14 days is a **hypothesis, not a fact** (see Staleness Contract in `CLAUDE.md`). Verify against code, graph, or the running build before acting, then bump `verified:`.
 
 ## Last Updated
+2026-09-10 — **Meta ilerleme: home/characters/level select + 2 para + kalıcı kayıt** (verified 2026-09-10): Tam meta loop. `MetaProgress` = autoload `Meta`, `user://meta.json`'a kaydeder. **İki para:** Altın (soft, bölüm sonu, tüm upgrade) + Kristal (premium/IAP stub). **Kristal sink YOK** — `convert_crystal` ile altına çevrilir (1:100, kullanıcı kararı). **Upgrade:** karakter başına CAN (+15 max HP/lv) + HASAR (+4 flat/lv), altınla, maliyet base*(lv+1); savaş başında CAN parti HP'sine, HASAR becerilere (duplicate) baklanır. **Sayfalar (kod-içi UI):** `home` (para çubuğu + OYNA/KARAKTERLER/çevir/IAP-stub/çıkış), `level_select` (5 seviye, `is_level_unlocked` kilit), `characters` (stat + yükselt). main_scene=`home`. `RunContent` seviye-bilinçli (`stage_nodes(i)` ölçekli, `reward_gold(i)`/`reward_crystal(i)`); kazanınca `battle.gd` ödülü Meta'ya yazar + `clear_level` + ANA EKRAN. Test 95/95, runtime temiz. → [[Turn-Based Savaş ve QTE]], [[Para Kazanma — Açık]]
+(önceki: **Run host entegrasyonu: battle.gd RunManager'ı sürüyor**)
+
+2026-09-10 — **Run host entegrasyonu: battle.gd RunManager'ı sürüyor (OYNANIR)** (verified 2026-09-10): Omurga artık sahneye bağlı. `scripts/battle.gd` tek-savaştan **run host**'a döndü: `RunManager` düğümleri gezer, BATTLE'da her `RunLoadout`'tan geçici Character (draft `available_skills` + run max HP) kurup `TurnManager` ile savaşır, bitince HP'yi loadout'a yazıp `report_battle_result`; CHOICE'ta rün-draft/boost butonları (`_combo_hint` "⚡AÇILIR!" ipucu) -> `apply_choice`; REWARD/bitiş ekranı. HP savaşlar arası taşınır, kazanınca düşen %25 dirilir (MVP soft-lock önleme). Yeni `RunContent` = demo bölüm (katalog+parti+`[BATTLE,CHOICE]×2→BOSS→REWARD`). Godot tip tuzağı: `Array` değişkeni tipli property'ye atanmaz -> `_enemy` paramları + `available_skills` dönüşü tiplendi. Test 71/71, `run_project` runtime TEMİZ. → [[Turn-Based Savaş ve QTE]]
+(önceki: **Run omurgası: roguelite bölüm akışı + rün draftı**)
+
+2026-09-10 — **Run omurgası: roguelite bölüm akışı + rün draftı** (verified 2026-09-10): Retention yönü belirlendi (kullanıcı): **Cup Heroes tarzı bölüm ilerleme** (Last War şehir kurma REDDEDİLDİ — DNA'ya ters). Bölüm deseni `[BATTLE, CHOICE]×N → BOSS → REWARD` → ana ekran → kalıcı güçlenme → tekrar. Yeni saf/headless katman `scripts/rpg/run/`: `RunManager` (host-callback'li, savaşı kendi sürmez — BATTLE'da düşman verir→`report_battle_result`, CHOICE'ta `apply_choice`, REWARD→para), `RunNode`/`StageDef` (düğüm listesi), `RunState`/`RunLoadout` (run-içi kit + HP taşıma), `SkillCatalog`, `ChoiceOption`/`ChoiceGenerator` (deterministik). **Rün-draft (kullanıcı seçti):** büyücüler temel rünle girer, seçimlerde rün DRAFT eder; kit her run sıfırlanır; **kaynak çifti toplanınca birleşim EMERGENT açılır** (ember+storm→Plazma). RNG yalnız seçimde, çizim saf beceri. Meta katman (kalıcı para/açılan rün) henüz YOK. Test 68/68. → [[Turn-Based Savaş ve QTE]]
+(önceki: **Şarj barlı birleşim becerileri + kombo/füzyon motoru silindi**)
+
 2026-09-10 — **Şarj barlı birleşim becerileri + kombo/füzyon motoru SİLİNDİ** (verified 2026-09-10): Beceri modeli yenilendi. Strike kaldırıldı. Her karakter **3 büyü** = 2 rün-özel NORMAL + 1 **BİRLEŞİM** (ultimate). Birleşim yeni şekil getirmez — kaynak rünler QTE'de **peş peşe** çizilir (Kayra Plazma = ember→storm, Derin Fırtına = frost→gale); tümü doğru → büyük buff (bonus ×2.5). **Şarj barı**: hasar ver+al miktarı kadar dolar (`Combatant.charge`, max 100), dolunca birleşim açılır, kullanınca sıfırlanır. **Durum sistemi**: Plazma yakma DoT (sonraki tur %40 tekrar hasar, `Skill.dot_fraction`), Fırtına stun (`applies_stun`, bir tur atla) — ikisi de `TurnManager._begin_turn`'de sıra başında işlenir. **Kombo/füzyon tamamen silindi**: eski gerçek-zamanlı motor (`main.gd`/`combo_resolver`/`damage_rules`/`resolved_spell`/`debug_overlay`), 3 test suite, tüm `deprecated/`; `RuneDB` sadeleşti (runes+shape_to_rune), `combo_config.json` küçüldü. Test 46/46. → [[Turn-Based Savaş ve QTE]]
 (önceki: **Turn-based RPG'ye dönüşüm**)
 
@@ -48,6 +57,10 @@ verified: 2026-09-10  # şarj barlı birleşim becerileri + kombo/füzyon motoru
 - **Düşman + dalga sistemi var** (`scripts/enemy.gd`, `main.gd`): 3 arketip `ENEMY_TYPES` (tank melee / swarm hızlı-melee / okçu ranged mermi atar). `WAVES` sıralı dalga — temizlenince sonraki spawn, son dalga → `game_won`. Test bölümü: 3 dalga (1t+10s / 3t+2o / 2t+2o+5s). Silüetten zaaf okuma + zafer/yenilgi UI eksik. → [[Düşman Tasarımı]]
 
 ## Open Tasks
+- **UI cilası (kod-içi, düz):** home/characters/level_select/battle hepsi kod-içi düz buton — Kenney UI asset'leri (main_menu'deki gibi) uygulanmadı. CHOICE ekranı + boss düğümü görsel ayrışmıyor. Hedef seçim hâlâ otomatik (en düşük HP).
+- **Gerçek IAP:** KRİSTAL AL şu an test stub (+5). Gerçek mağaza entegrasyonu yok.
+- **Açılan rün havuzu (opsiyonel):** kullanıcının erken bahsettiği "kristalle rün aç" fikri kurulmadı (kristal şu an sadece altına çevriliyor).
+- **Denge:** upgrade maliyet/step, seviye ölçek (×1.30/seviye), ödül miktarları tuning edilmedi — prototip değerleri.
 - Zafer/yenilgi ekranı (şu an sadece `print`); dalga arası nefes/gösterge.
 - [[Prototip M0]] yap: 4 rün + düz çizgi, swarm+tank+okçu, ~30 sn. Telefonda, tek elle. (dalga sistemi hazır)
 - Test: birine 20 dk oynat → **20. dk'da düşünerek mi refleksle mi çiziyor?** (D7 tekrar riski ölçümü)
@@ -56,6 +69,7 @@ verified: 2026-09-10  # şarj barlı birleşim becerileri + kombo/füzyon motoru
 - _(none yet)_
 
 ## Kararı Verilmeyen (tahmin üretme)
-- Para kazanma modeli ([[Para Kazanma — Açık]]) — beceri↔ödeme çelişkisi çözülmedi.
-- Uzun vadeli çekim/2. oynanış sebebi, ilerleme/meta, geri dönüş kancası, sosyal.
-- 50. dalga kutlama ölçeği. Uzun vadeli dönüşüm planı. (Kombo penceresi süresi artık `data/combo_config.json`'da — prototipte ayarlanacak, mimari karar değil.)
+- Para kazanma: **iki-para modeli KARAR VERİLDİ 2026-09-10** (Altın soft + Kristal premium, kristal→altın çevrim, upgrade'ler altınla → log.md). AÇIK kalan: gerçek IAP fiyatlandırma, beceri↔ödeme çelişkisi (pay-to-win riski), kristalin çevrim dışı değeri. → [[Para Kazanma — Açık]]
+- Geri dönüş kancası (günlük ödül/challenge), sosyal. (Retention omurgası KARAR VERİLDİ 2026-09-10: Cup Heroes tarzı bölüm ilerleme + run-draft → log.md.)
+- Bölüm sayısı/zorluk eğrisi, boss tasarımı. REWARD para miktarı + meta upgrade maliyetleri tuning.
+- Kombo penceresi süresi artık `data/combo_config.json`'da — prototipte ayarlanacak, mimari karar değil.
