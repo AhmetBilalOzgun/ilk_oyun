@@ -1,30 +1,40 @@
 extends RefCounted
 class_name SkillCatalog
 
-# Run-draft için beceri kataloğu. Saf/headless.
-#   - normal beceriler: rune_id -> Skill (tek rün QTE). Draft bunlardan seçtirir.
-#   - birleşim (combo) becerileri: kaynak rün dizisi (rune_sequence) tamamlanınca
-#     loadout'ta OTOMATİK açılır. Yeni şekil yok — mevcut rünler peş peşe.
+# Run-draft için form + relic kataloğu. Saf/headless.
+#   - forms      : form_id -> MageForm (her form kendi temel büyü + ultimate'ini taşır).
+#   - transforms : (from_form_id, rune_id) -> to_form_id. Rün alınca kimlik DÖNÜŞÜR
+#                  (bkz spec Part 5). MVP: (ember, storm) -> plasma.
+#   - relics     : kural-değiştiren kartlar (CHOICE havuzu).
 #
-# Birleşim açılma kuralı RunLoadout.available_skills()'te: bir büyücü combo'nun
-# TÜM kaynak rünlerini tutuyorsa combo becerisi kitine eklenir (bkz [[Turn-Based
-# Savaş ve QTE]] — ember+storm=Plazma, frost+gale=Fırtına).
+# Combo/rün-dizisi modeli KALDIRILDI — dönüşüm artık formu KOMPLE değiştirir, üstüne
+# beceri EKLEMEZ (bkz RunLoadout.available_skills).
 
-var _normal: Dictionary = {}   # rune_id -> Skill
-var combos: Array = []         # Array[Skill] — her biri requires_charge + rune_sequence
+var forms: Dictionary = {}       # form_id -> MageForm
+var transforms: Dictionary = {}  # "from_id|rune_id" -> to_form_id
+var relics: Array = []           # Array[Relic]
 
-func add_normal(skill: Skill) -> void:
-	_normal[skill.rune_id] = skill
+func add_form(p_form: MageForm) -> void:
+	forms[p_form.id] = p_form
 
-func add_combo(skill: Skill) -> void:
-	combos.append(skill)
+func form(form_id: String) -> MageForm:
+	return forms.get(form_id, null)
 
-func normal_for_rune(rune_id: String) -> Skill:
-	return _normal.get(rune_id, null)
+func add_transform(from_id: String, rune_id: String, to_id: String) -> void:
+	transforms["%s|%s" % [from_id, rune_id]] = to_id
 
-func has_rune(rune_id: String) -> bool:
-	return _normal.has(rune_id)
+# from_id formu rune_id alırsa hangi forma döner? Yoksa "" (dönüşüm yok).
+func transform_for(from_id: String, rune_id: String) -> String:
+	return transforms.get("%s|%s" % [from_id, rune_id], "")
 
-# Draft'ta teklif edilebilecek tüm normal rünler.
-func rune_pool() -> Array:
-	return _normal.keys()
+# Herhangi bir dönüşümde geçen tüm rün id'leri (CHOICE'ta teklif için).
+func acquirable_runes() -> Array:
+	var out: Array = []
+	for key in transforms.keys():
+		var rune: String = String(key).split("|")[1]
+		if rune not in out:
+			out.append(rune)
+	return out
+
+func add_relic(relic: Relic) -> void:
+	relics.append(relic)

@@ -56,8 +56,12 @@ func _ready() -> void:
 	add_child(back)
 
 	_refresh_currency()
-	if not _chars.is_empty():
-		_on_select(_chars[0].id)
+	# Panel aktif büyücüde açılsın (yoksa ilki).
+	var start_id: String = Meta.selected_character
+	if start_id == "" or not _by_id.has(start_id):
+		start_id = _chars[0].id if not _chars.is_empty() else ""
+	if start_id != "":
+		_on_select(start_id)
 
 func _refresh_currency() -> void:
 	_currency.text = "💰 Altın: %d      💎 Kristal: %d" % [Meta.gold, Meta.crystal]
@@ -72,14 +76,85 @@ func _rebuild_detail() -> void:
 	var c: Character = _by_id[_selected_id]
 	var max_hp: int = c.max_hp + Meta.hp_bonus(c.id)
 
-	_detail.add_child(_stat("%s" % c.display_name, 52, Color(0.99, 0.85, 0.4)))
+	var is_active: bool = Meta.selected_character == c.id
+	var title := "%s%s" % [c.display_name, "   ★ AKTİF" if is_active else ""]
+	_detail.add_child(_stat(title, 52, Color(0.99, 0.85, 0.4)))
 	_detail.add_child(_stat("Element: %s" % ", ".join(c.element_pair), 34))
+	_detail.add_child(_stat(_kit_text(c.id), 30, Color(0.6, 0.85, 1.0)))
 	_detail.add_child(_stat("Max Can: %d  (taban %d + bonus %d)" % [max_hp, c.max_hp, Meta.hp_bonus(c.id)], 34))
 	_detail.add_child(_stat("Hasar bonusu: +%d (flat)" % Meta.power_bonus(c.id), 34))
 	_detail.add_child(_stat("Hız: %d" % c.speed, 34))
 
+	# SEÇ butonu — bu büyücüyü aktif yap (zaten aktifse kilitli).
+	var sel := Button.new()
+	sel.text = "★ AKTİF BÜYÜCÜ" if is_active else "SEÇ (aktif yap)"
+	sel.custom_minimum_size = Vector2(440, 110)
+	sel.add_theme_font_size_override("font_size", 36)
+	sel.disabled = is_active
+	sel.pressed.connect(_on_select_active)
+	_detail.add_child(sel)
+
 	_detail.add_child(_upgrade_row("CAN", MetaProgress.Track.HP))
 	_detail.add_child(_upgrade_row("HASAR", MetaProgress.Track.POWER))
+
+	# Ekipman (kalıcı, tüm karakterlerce paylaşılan): al + tak.
+	_detail.add_child(_stat("— EKİPMAN —", 40, Color(0.99, 0.85, 0.4)))
+	for e in Equipment.catalog():
+		_detail.add_child(_equipment_row(e))
+
+func _equipment_row(e: Equipment) -> HBoxContainer:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 20)
+	var owned: bool = Meta.is_owned(e.id)
+	var equipped: bool = Meta.equipped_in(e.slot) == e.id
+	h.add_child(_stat("[%s] %s — %s" % [Equipment.slot_name(e.slot), e.display_name, e.description], 26))
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(300, 90)
+	b.add_theme_font_size_override("font_size", 30)
+	if equipped:
+		b.text = "★ TAKILI"; b.disabled = true
+	elif owned:
+		b.text = "TAK"; b.pressed.connect(_on_equip.bind(e.id))
+	else:
+		b.text = "AL (%d 💰)" % e.cost
+		b.disabled = Meta.gold < e.cost
+		b.pressed.connect(_on_buy_equipment.bind(e.id, e.cost))
+	h.add_child(b)
+	return h
+
+func _on_buy_equipment(item_id: String, cost: int) -> void:
+	if Meta.buy_equipment(item_id, cost):
+		Meta.equip(Equipment.by_id(item_id))   # aldıysan hemen tak (kolaylık)
+		_refresh_currency()
+		_rebuild_detail()
+
+func _on_equip(item_id: String) -> void:
+	if Meta.equip(Equipment.by_id(item_id)):
+		_rebuild_detail()
+
+# Büyücünün başlangıç formu + Storm rünüyle açılan dönüşüm (tutorial ipucu).
+func _kit_text(char_id: String) -> String:
+	var cat := RunContent.catalog()
+	var start: Dictionary = RunContent.start_forms(cat)
+	var form: MageForm = start.get(char_id, null)
+	if form == null:
+		return "Form: ?"
+	# Sabit jest dizisi (◀▶●) KALDIRILDI — dizi her cast'te rastgele üretiliyor. Onun
+	# yerine formu bir cümlede anlatan pasif metni göster.
+	var line := "Form: %s" % form.display_name
+	if form.passive_text != "":
+		line += "\n%s" % form.passive_text
+	# Bu formu dönüştüren bir rün var mı?
+	for rune_id in cat.acquirable_runes():
+		var to_id := cat.transform_for(form.id, rune_id)
+		if to_id != "":
+			line += "\n+%s Rününü Al → %s ol" % [rune_id.capitalize(), cat.form(to_id).display_name]
+			break
+	return line
+
+func _on_select_active() -> void:
+	Meta.select_character(_selected_id)
+	_rebuild_detail()
 
 func _upgrade_row(track_name: String, track: int) -> HBoxContainer:
 	var c: Character = _by_id[_selected_id]

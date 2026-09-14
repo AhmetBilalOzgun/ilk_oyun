@@ -28,7 +28,10 @@ var gold: int = 0
 var crystal: int = 0
 var cleared_levels: int = 0           # bitmiş seviye sayısı (açık = i <= cleared_levels)
 var upgrades: Dictionary = {}         # char_id -> {"hp":int, "power":int}
+var selected_character: String = ""   # oyun başı seçilen büyücü; "" -> ilk
 var selected_level: int = 0           # level_select -> battle arası taşıyıcı
+var owned_equipment: Array = []       # sahip olunan ekipman id'leri
+var equipped: Dictionary = {}         # str(slot) -> ekipman id (slot başına bir parça)
 var persist: bool = true              # false -> save/load devre dışı (test)
 
 func _ready() -> void:
@@ -97,6 +100,55 @@ func clear_level(i: int) -> void:
 		cleared_levels = i + 1
 	save_game()
 
+# --- Ekipman (kalıcı) ---
+
+func is_owned(item_id: String) -> bool:
+	return item_id in owned_equipment
+
+# Altınla ekipman al. Yeter altın yoksa / zaten sahipse false.
+func buy_equipment(item_id: String, cost: int) -> bool:
+	if is_owned(item_id) or gold < cost:
+		return false
+	gold -= cost
+	owned_equipment.append(item_id)
+	save_game()
+	return true
+
+# Sahip olunan bir ekipmanı slot'una tak (aynı slot'taki eskiyi değiştirir).
+func equip(item: Equipment) -> bool:
+	if item == null or not is_owned(item.id):
+		return false
+	equipped[str(item.slot)] = item.id
+	save_game()
+	return true
+
+func equipped_in(slot: int) -> String:
+	return String(equipped.get(str(slot), ""))
+
+# Takılı tüm ekipman parçaları (Equipment listesi).
+func equipped_list() -> Array:
+	var out: Array = []
+	for key in equipped.keys():
+		var e := Equipment.by_id(String(equipped[key]))
+		if e != null:
+			out.append(e)
+	return out
+
+# Takılı ekipmandan gelen düz stat bonusları (savaş kurulumunda uygulanır).
+func equipped_hp_bonus() -> int:
+	var total := 0
+	for e in equipped_list():
+		if e.hook == "max_hp_flat":
+			total += int(e.amount)
+	return total
+
+func equipped_speed_bonus() -> int:
+	var total := 0
+	for e in equipped_list():
+		if e.hook == "speed_flat":
+			total += int(e.amount)
+	return total
+
 # --- Kalıcılık ---
 
 func to_dict() -> Dictionary:
@@ -105,6 +157,9 @@ func to_dict() -> Dictionary:
 		"crystal": crystal,
 		"cleared_levels": cleared_levels,
 		"upgrades": upgrades,
+		"selected_character": selected_character,
+		"owned_equipment": owned_equipment,
+		"equipped": equipped,
 	}
 
 func from_dict(d: Dictionary) -> void:
@@ -112,6 +167,14 @@ func from_dict(d: Dictionary) -> void:
 	crystal = int(d.get("crystal", 0))
 	cleared_levels = int(d.get("cleared_levels", 0))
 	upgrades = d.get("upgrades", {})
+	selected_character = String(d.get("selected_character", ""))
+	owned_equipment = d.get("owned_equipment", [])
+	equipped = d.get("equipped", {})
+
+# Aktif büyücüyü seç (oyun başı / karakterler ekranı) + kalıcı kaydet.
+func select_character(char_id: String) -> void:
+	selected_character = char_id
+	save_game()
 
 func save_game() -> void:
 	if not persist:

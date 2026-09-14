@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://bml862nje0alg"]
+
+[ext_resource type="SpriteFrames" path="res://assets/wizard/wizard_fire_frames.tres" id="1_frames"]
+
+[node name="Wizard" type="AnimatedSprite2D"]
+sprite_frames = ExtResource("1_frames")
+animation = &"idle"
+autoplay = "idle"

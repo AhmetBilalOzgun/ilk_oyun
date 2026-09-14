@@ -19,9 +19,18 @@ func _ready() -> void:
 	add_child(_currency)
 	_refresh_currency()
 
+	# İlk açılış: büyücü seçilmemişse varsayılan olarak ilkini seç (kalıcı).
+	if Meta.selected_character == "":
+		Meta.select_character(RunContent.party()[0].id)
+
 	var title := _label("RÜN BÜYÜCÜSÜ", 72, Vector2(60, 240))
 	title.add_theme_color_override("font_color", Color(0.99, 0.85, 0.4))
 	add_child(title)
+
+	var active := RunContent.character_by_id(Meta.selected_character)
+	var who := _label("Büyücü: %s (%s)" % [active.display_name, ", ".join(active.element_pair)], 40, Vector2(60, 360))
+	who.add_theme_color_override("font_color", Color(0.6, 0.85, 1.0))
+	add_child(who)
 
 	var box := VBoxContainer.new()
 	box.position = Vector2(180, 560)
@@ -51,19 +60,23 @@ func _on_buy_crystal() -> void:
 	Meta.add_crystal(5)   # IAP stub
 	_refresh_currency()
 
-# --- UI yardımcıları ---
+const PIXEL_FONT = preload("res://assets/fonts/PixelOperator8-Bold.ttf")
 
 func _label(text: String, fsize: int, pos: Vector2) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.position = pos
-	l.add_theme_font_size_override("font_size", fsize)
+	l.add_theme_font_override("font", PIXEL_FONT)
+	l.add_theme_font_size_override("font_size", int(round(fsize * 0.5)))
+	l.add_theme_constant_override("outline_size", 4)
+	l.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.08, 1.0))
 	return l
 
 func _button(text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(720, 140)
-	b.add_theme_font_size_override("font_size", 48)
+	b.custom_minimum_size = Vector2(720, 110)
+	b.add_theme_font_override("font", PIXEL_FONT)
+	b.add_theme_font_size_override("font_size", 22)
 	b.pressed.connect(cb)
 	return b

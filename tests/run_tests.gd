@@ -9,6 +9,9 @@ extends SceneTree
 const TestTurnManager := preload("res://tests/test_turn_manager.gd")
 const TestRunManager := preload("res://tests/test_run_manager.gd")
 const TestMetaProgress := preload("res://tests/test_meta_progress.gd")
+const TestInputEvaluator := preload("res://tests/test_input_evaluator.gd")
+const TestMageForm := preload("res://tests/test_mage_form.gd")
+const TestEquipment := preload("res://tests/test_equipment.gd")
 
 var passed := 0
 var failed := 0
@@ -28,11 +31,17 @@ func eqf(a: float, b: float, msg: String, eps := 0.001) -> void:
 	check(abs(a - b) < eps, "%s (got %s, want %s)" % [msg, a, b])
 
 func _initialize() -> void:
+	print("== Aktif girdi testleri ==")
+	TestInputEvaluator.run(self)
+	print("== MageForm testleri ==")
+	TestMageForm.run(self)
 	print("== Turn-based savaş testleri ==")
 	TestTurnManager.run(self)
 	print("== Run omurgası testleri ==")
 	TestRunManager.run(self)
 	print("== Meta ilerleme testleri ==")
 	TestMetaProgress.run(self)
+	print("== Ekipman testleri ==")
+	TestEquipment.run(self)
 	print("== Sonuç: %d geçti, %d kaldı ==" % [passed, failed])
 	quit(1 if failed > 0 else 0)

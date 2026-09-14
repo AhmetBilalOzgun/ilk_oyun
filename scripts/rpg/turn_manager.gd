@@ -1,33 +1,35 @@
 extends RefCounted
 class_name TurnManager
 
-# Turn-based savaş durum makinesi. Saf/headless: motor zamanı OKUMAZ — tick()
-# dışarıdan ÖLÇEKLENMEMİŞ dt alır. Geometri/çizim bilmez; QTE sonucu rune_id
-# olarak dışarıdan verilir (submit_qte).
+# Turn-based savaş durum makinesi. Saf/headless: motor zamanı/geometri BİLMEZ.
+# Çizim KALDIRILDI; yerine hafif AKTİF GİRDİ (tap/swipe dizisi). Oyuncu bir beceri
+# seçer -> AWAITING_INPUT: host jesti yakalar, InputEvaluator ile PERFECT/GOOD/MISS
+# üretir ve submit_input(result) ile verir. Motor jesti GÖRMEZ, sadece sonucu tüketir
+# (bkz spec Part 19). FAIL-SOFT: MISS bile taban hasar verir (büyü iptal olmaz).
 #
-# Durumlar: IDLE -> SELECTING_ACTION -> QTE -> RESOLVING -> NEXT_TURN -> ...
+# Durumlar: IDLE -> SELECTING_ACTION -> AWAITING_INPUT -> RESOLVING -> NEXT_TURN -> ...
 #
 # İki beceri türü:
-#   NORMAL   : tek rün QTE.
-#   BİRLEŞİM : requires_charge + rune_sequence. Şarj barı dolunca seçilebilir,
-#              QTE'de kaynak rünler PEŞ PEŞE çizilir (her adım doğru -> ilerle),
-#              tamamı doğru -> büyük buff. Kullanınca şarj sıfırlanır.
+#   TEMEL    : formun temel büyüsü. Her zaman seçilebilir (fail-soft taban).
+#   ULTIMATE : requires_charge. Enerji (şarj) barı dolunca seçilebilir; kullanınca
+#              sıfırlanır. Yüksek taban + durum etkisi (yakma/stun/AoE).
 #
 # Şarj barı: her hasar VER/AL olayında vurana+yiyene miktar kadar eklenir.
 # Durum: pending_dot (yakma) ve stunned sıra BAŞINDA işlenir (_begin_turn).
 
-enum State { IDLE, SELECTING_ACTION, QTE, RESOLVING, NEXT_TURN, BATTLE_OVER }
+enum State { IDLE, SELECTING_ACTION, AWAITING_INPUT, RESOLVING, NEXT_TURN, BATTLE_OVER }
 
 signal turn_started(actor)                          # Combatant
 signal action_selected(skill, target)               # Skill, Combatant
-signal qte_started(skill, target, time_limit, rune_id)  # sıradaki çizilecek rün
+signal input_requested(sequence)                    # InputSequence — host jesti yakalasın
 signal damage_resolved(breakdown, attacker, target) # DamageBreakdown, Combatant, Combatant
 signal dot_applied(combatant, amount)               # sıra başı yakma hasarı
 signal stun_skipped(combatant)                       # stun nedeniyle atlanan sıra
+signal combatant_defeated(combatant)               # bir katılımcı öldü (orb/işaret için)
 signal battle_ended(winner_side)                    # Combatant.Side
 
 var config: BattleConfig
-var recognizer: IRuneRecognizer  # QTE tanıma; opsiyonel
+var relics: RelicSet             # aktif relic kuralları (opsiyonel; null -> etkisiz)
 
 var state: int = State.IDLE
 var combatants: Array = []
@@ -35,17 +37,15 @@ var order: Array = []
 var turn_index: int = 0
 var active: Combatant = null
 
-# QTE durumu
+# AWAITING_INPUT sırasında bekleyen eylem (submit_input ile çözülür).
 var pending_skill: Skill = null
 var pending_target: Combatant = null
-var qte_remaining: float = 0.0
-var qte_sequence: Array = []   # bu QTE'de çizilecek rün dizisi
-var qte_progress: int = 0      # kaç rün doğru çizildi
+
 var last_breakdown: DamageBreakdown = null
 
-func _init(p_config: BattleConfig = null, p_recognizer: IRuneRecognizer = null) -> void:
+func _init(p_config: BattleConfig = null, p_relics: RelicSet = null) -> void:
 	config = p_config if p_config != null else BattleConfig.new()
-	recognizer = p_recognizer
+	relics = p_relics if p_relics != null else RelicSet.new()
 
 # --- Kurulum ---
 
@@ -97,6 +97,8 @@ func _begin_turn() -> void:
 		active.gain_charge(d)   # alınan hasar barı doldurur
 		dot_applied.emit(active, d)
 		var w := _check_battle_end()
+		if not active.is_alive():
+			combatant_defeated.emit(active)
 		if w != -1:
 			state = State.BATTLE_OVER
 			battle_ended.emit(w)
@@ -118,62 +120,45 @@ func _begin_turn() -> void:
 
 # --- Oyuncu sırası ---
 
-# Beceri + hedef seç -> QTE aç. requires_charge becerisi şarj dolu değilse reddedilir.
+# Beceri + hedef seç -> AKTİF GİRDİ bekle. requires_charge becerisi şarj dolu değilse
+# reddedilir (UI de sunmamalı). Çözüm submit_input(result) gelince olur (fail-soft).
 func select_action(skill: Skill, target: Combatant) -> void:
 	if state != State.SELECTING_ACTION:
 		return
 	if skill.requires_charge and not active.is_charged():
-		return   # birleşim henüz açık değil (UI de sunmamalı)
+		return   # ultimate henüz açık değil
 	pending_skill = skill
 	pending_target = target
-	qte_sequence = skill.qte_runes()
-	qte_progress = 0
-	state = State.QTE
-	qte_remaining = skill.qte_time_limit
+	state = State.AWAITING_INPUT
 	action_selected.emit(skill, target)
-	qte_started.emit(skill, target, qte_remaining, qte_sequence[0])
+	input_requested.emit(skill.input_sequence)
 
-# Motor çizimi bitirince çağırır: recognizer ile rune_id bul, adımı çöz.
-func submit_drawing(strokes) -> void:
-	var rid = recognizer.recognize(strokes) if recognizer != null else null
-	submit_qte(rid)
-
-# Tanınan rune_id (veya null) ile QTE adımını çöz. Dizide sıradaki rünü bekler.
-# Doğru -> ilerle (dizi bitince başarı). Yanlış/null -> dizi başarısız (fail-soft).
-func submit_qte(recognized_rune_id) -> void:
-	if state != State.QTE:
+# Host, aktif girdiyi değerlendirip sonucu (InputEvaluator.Result) buraya verir.
+# Çarpan BattleConfig'ten gelir; MISS bile taban hasar verir (fail-soft).
+func submit_input(result: int) -> void:
+	if state != State.AWAITING_INPUT:
 		return
-	var expected = qte_sequence[qte_progress]
-	if recognized_rune_id != null and recognized_rune_id == expected:
-		qte_progress += 1
-		if qte_progress >= qte_sequence.size():
-			_resolve(true)
-		else:
-			# Sıradaki rün: pencereyi yenile, UI'a bildir.
-			qte_remaining = pending_skill.qte_time_limit
-			qte_started.emit(pending_skill, pending_target, qte_remaining, qte_sequence[qte_progress])
-	else:
-		_resolve(false)
-
-# --- Zaman ilerletme (ÖLÇEKLENMEMİŞ dt) ---
-
-func tick(unscaled_dt: float) -> void:
-	if state != State.QTE:
-		return
-	qte_remaining -= unscaled_dt
-	if qte_remaining <= 0.0:
-		qte_remaining = 0.0
-		_resolve(false)
-
-# --- Çözümleme ---
-
-func _resolve(qte_success: bool) -> void:
-	state = State.RESOLVING
-	_apply_action(pending_skill, pending_target, qte_success)
+	var skill := pending_skill
+	var target := pending_target
 	pending_skill = null
 	pending_target = null
-	qte_sequence = []
-	qte_progress = 0
+	var mult := config.input_multiplier(result)
+	_apply_action(skill, target, mult, float(result) / float(InputEvaluator.Result.PERFECT))
+
+# Ritim KOMBO yolu: host per-tile kaliteyi tek bir float çarpana indirger (bkz
+# RhythmMinigame.combo_score) ve doğrudan verir. submit_input(enum) ile aynı çözümleme
+# (_apply_action) — fark yalnız çarpanın sürekli olması (finisher ağırlıklı + kombo
+# kırılma yansır). quality: 0..1 (görsel/telemetri; DamageBreakdown.input_quality).
+func submit_input_multiplier(mult: float, quality: float = 1.0) -> void:
+	if state != State.AWAITING_INPUT:
+		return
+	var skill := pending_skill
+	var target := pending_target
+	pending_skill = null
+	pending_target = null
+	_apply_action(skill, target, mult, quality)
+
+# --- Çözümleme ---
 
 func _run_enemy_turn() -> void:
 	var act := EnemyAI.choose_action(active, _alive_on(Combatant.Side.PARTY), config)
@@ -181,22 +166,68 @@ func _run_enemy_turn() -> void:
 		state = State.NEXT_TURN
 		return
 	action_selected.emit(act["skill"], act["target"])
-	_apply_action(act["skill"], act["target"], false)  # düşman QTE yapmaz -> taban
+	_apply_action(act["skill"], act["target"], 1.0, 0.0)  # düşman cast çarpanı yok -> taban
 
-func _apply_action(skill: Skill, target: Combatant, qte_success: bool) -> void:
-	var b := BattleDamage.compute(skill, qte_success, target, config)
-	target.take_damage(b.final_damage)
+func _apply_action(skill: Skill, target: Combatant, cast_bonus: float, quality: float) -> void:
+	state = State.RESOLVING
+	# Relic: Storm sonrası güçlenme (post_storm_amp) — aktörde biriken buff'ı uygula.
+	var extra := 1.0
+	if active.pending_amp > 1.0:
+		extra = active.pending_amp
+		active.pending_amp = 1.0
+	var b := BattleDamage.compute(skill, cast_bonus * extra, target, config, relics)
+	b.input_quality = quality
 	last_breakdown = b
+	target.take_damage(b.final_damage)
+	var by_party := active.side == Combatant.Side.PARTY
 
-	# Şarj: verilen ve alınan hasar barı doldurur.
-	active.gain_charge(b.final_damage)
+	# Relic: Kan Bağı — oyuncu verdiği hasarın bir kısmını can olarak alır.
+	if by_party and relics.has("lifesteal"):
+		active.heal(int(round(float(b.final_damage) * relics.amount("lifesteal", 0.0))))
+
+	# Ekipman: Diken Zırhı — düşman vurunca hasarın bir kısmı saldırgana döner.
+	if not by_party and relics.has("reflect"):
+		var refl := int(round(float(b.final_damage) * relics.amount("reflect", 0.0)))
+		if refl > 0:
+			active.take_damage(refl)
+			if not active.is_alive():
+				combatant_defeated.emit(active)
+
+	# Şarj: verilen ve alınan hasar barı doldurur. Relic Kondansatör dolumu hızlandırır.
+	var charge_mult := relics.amount("charge_gain_mult", 1.0) if by_party else 1.0
+	active.gain_charge(int(round(float(b.final_damage) * charge_mult)))
 	target.gain_charge(b.final_damage)
 
 	# Durum etkileri (birleşim kimliği): yakma DoT + stun.
 	if skill.dot_fraction > 0.0 and target.is_alive():
-		target.pending_dot += int(round(float(b.final_damage) * skill.dot_fraction))
+		# Relic: Köz — oyuncu DoT'u daha sert vurur.
+		var dot_mult := relics.amount("dot_amp", 1.0) if by_party else 1.0
+		var dot := int(round(float(b.final_damage) * skill.dot_fraction * dot_mult))
+		target.pending_dot += dot
+		# Relic: Wildfire — yakma komşu düşmanlara da yayılır.
+		if relics.has("burn_spread"):
+			for n in _neighbors_of(target):
+				n.pending_dot += dot
 	if skill.applies_stun and target.is_alive():
 		target.stunned = true
+
+	# ULTIMATE AoE (Inferno / Plasma Storm): hedefin komşularına da vurur. Her komşu
+	# kendi zaaf/direncine göre hesaplanır; DoT/stun de yayılır. Şarj yalnız birincil
+	# hedeften kazanılır (splash sade).
+	if skill.aoe:
+		for n in _neighbors_of(target):
+			var sb := BattleDamage.compute(skill, cast_bonus * extra, n, config, relics)
+			n.take_damage(sb.final_damage)
+			if skill.dot_fraction > 0.0 and n.is_alive():
+				n.pending_dot += int(round(float(sb.final_damage) * skill.dot_fraction))
+			if skill.applies_stun and n.is_alive():
+				n.stunned = true
+			if not n.is_alive():
+				combatant_defeated.emit(n)
+
+	# Relic: Overcharge — Storm cast'inden sonra AKTÖRÜN bir sonraki cast'i güçlenir.
+	if active.side == Combatant.Side.PARTY and skill.effect == "Shatter":
+		active.pending_amp = relics.amount("post_storm_amp", 1.0)
 
 	# Birleşim becerisi şarjı tüketir (başarısız olsa bile — commit edildi).
 	if skill.requires_charge:
@@ -204,6 +235,8 @@ func _apply_action(skill: Skill, target: Combatant, qte_success: bool) -> void:
 
 	state = State.NEXT_TURN
 	damage_resolved.emit(b, active, target)
+	if not target.is_alive():
+		combatant_defeated.emit(target)
 	var winner := _check_battle_end()
 	if winner != -1:
 		state = State.BATTLE_OVER
@@ -226,6 +259,14 @@ func _alive_on(side: int) -> Array:
 	var out: Array = []
 	for c in combatants:
 		if c.side == side and c.is_alive():
+			out.append(c)
+	return out
+
+# Hedefle AYNI tarafta, hedef HARİÇ canlı katılımcılar (Wildfire yayılımı için).
+func _neighbors_of(target: Combatant) -> Array:
+	var out: Array = []
+	for c in combatants:
+		if c != target and c.side == target.side and c.is_alive():
 			out.append(c)
 	return out
 

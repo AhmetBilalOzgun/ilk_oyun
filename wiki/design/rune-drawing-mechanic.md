@@ -3,11 +3,13 @@ type: design
 title: "Rün Çizim Mekaniği"
 created: 2026-09-07
 updated: 2026-09-07
-verified: 2026-09-07  # gizli çapa grid snap + strike standalone
+verified: 2026-09-12  # skorlama toleransı MAX_DIST 0.60; gizli çapa grid snap + strike standalone
 tags:
   - design
   - mechanic
-status: approved
+  - deprecated
+status: deprecated
+verified: 2026-09-13  # ÇİZİM/QTE KALDIRILDI — bu sayfa tarihsel
 domain: mechanic
 related:
   - "[[Ekran Düzeni]]"
@@ -25,6 +27,12 @@ code_anchors:
 
 # Rün Çizim Mekaniği
 
+> [!warning] TARİHSEL — KALDIRILDI (2026-09-13)
+> Rün çizimi ve QTE **tamamen kaldırıldı** ("çizime baybay"; kullanıcı). Combat
+> artık tap-to-cast; recognizer/rune_templates/qte_minigame/rune_trail dosyaları
+> silindi. Bu sayfa yalnızca tasarım geçmişi olarak durur. Güncel model:
+> [[Turn-Based Savaş ve QTE]].
+
 Çizim mekaniği, dokunmadan **yapısal olarak daha ağır**: hatırlama ister, tanıma değil. Aşağıdaki kararlar bu bilişsel yükü **sabit** tutmak için var.
 
 ## Bilişsel yükü kontrol eden 4 karar
@@ -41,6 +49,10 @@ code_anchors:
 ## Çizim tanıma — ham iz (snap YOK) (verified 2026-09-07)
 
 Çapa/snap sistemi **denendi ve kaldırıldı** (kötü his). Tanıma doğrudan ham parmak izinde: `RecognizerAdapter.classify_shape` resample + köşe/kesişim geometrisiyle line/X/O/V/lightning ayırır. Görünen iz de ham/akıcı (`RuneTrail`, `draw_polyline`). Tek çizim kendini keserse X. → [[Çizim Tanıma — $1 Recognizer]]
+
+## Doğruluk skorlaması — tolerans (verified 2026-09-12)
+
+Kimlik (hangi rün) `RecognizerAdapter`'da; **özen/doğruluk** ayrı katman: `RuneTemplates.score` ($1 ruhu, normalize + şablon eşleme). Skor `= 1 - dist/MAX_DIST`. `MAX_DIST` tolerans eğiminin eğimidir — büyütmek doğru-şekil özensiz çizimi ödüllendirir, yanlış şekli değil (o ayrıca `COUNT_PENALTY` stroke-sayısı cezasıyla korunur). **2026-09-12:** `MAX_DIST` 0.40 → 0.60 (kullanıcı: tolerans çok düşük). Headless ölçüm: %12-16 parmak titremesi 0.53-0.79 → 0.68-0.86; yanlış şekil hâlâ ~0.06-0.11.
 
 ## Düz vuruş (temel saldırı) — tık, standalone (verified 2026-09-07)
 

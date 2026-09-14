@@ -1,14 +1,17 @@
 extends CanvasLayer
 class_name TurnDebugOverlay
 
-# Turn-based savaş debug overlay'i. Aktif sıra, durum, QTE kalan süresi ve son
-# hasar dökümü (taban + bonus + zaaf/direnç AYRI AYRI) gösterir. Ayrıca sıra
-# listesi + HP. F1 ile aç/kapa. Koddan kurulur (debug_overlay.gd deseni).
+# Turn-based savaş debug overlay'i. Aktif sıra, durum ve son hasar dökümü (taban +
+# bonus + zaaf/direnç AYRI AYRI) gösterir. Ayrıca sıra listesi + HP. F1 ile aç/kapa.
+# Çizim KALDIRILDI; aktif girdi (tap/swipe) -> AWAITING_INPUT durumu.
 
 var _label: Label
 
+# TurnManager.State ile hizalı: IDLE, SELECTING_ACTION, AWAITING_INPUT, RESOLVING,
+# NEXT_TURN, BATTLE_OVER.
 const _STATE_NAMES := {
-	0: "Idle", 1: "Beceri Seç", 2: "QTE", 3: "Çözülüyor", 4: "Sıra Geç", 5: "Savaş Bitti"
+	0: "Idle", 1: "Beceri Seç", 2: "Girdi Bekle", 3: "Çözülüyor",
+	4: "Sıra Geç", 5: "Savaş Bitti"
 }
 
 func _ready() -> void:
@@ -32,19 +35,13 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func update_view(tm: TurnManager) -> void:
 	if _label == null:
 		return
+	if tm == null:
+		# Savaş arası (seçim/run sonu): aktif savaş yok.
+		_label.text = "(savaş yok — seçim/run sonu)"
+		return
 	var active_txt := "-"
 	if tm.active != null:
 		active_txt = "%s (hız %d)" % [tm.active.display_name(), tm.active.speed()]
-
-	var qte_txt := "-"
-	if tm.state == TurnManager.State.QTE:
-		var hint := "?"
-		if tm.qte_progress < tm.qte_sequence.size():
-			hint = str(tm.qte_sequence[tm.qte_progress])
-		var step := ""
-		if tm.qte_sequence.size() > 1:
-			step = "  (%d/%d)" % [tm.qte_progress + 1, tm.qte_sequence.size()]
-		qte_txt = "%.2f sn  [çiz: %s]%s" % [max(0.0, tm.qte_remaining), hint, step]
 
 	var dmg_txt := "-"
 	if tm.last_breakdown != null:
@@ -56,7 +53,6 @@ func update_view(tm: TurnManager) -> void:
 	var lines := [
 		"durum     : %s" % _STATE_NAMES.get(tm.state, "?"),
 		"aktif sıra: %s" % active_txt,
-		"QTE       : %s" % qte_txt,
 		"son hasar : %s" % dmg_txt,
 		"",
 		"-- sıra listesi --",

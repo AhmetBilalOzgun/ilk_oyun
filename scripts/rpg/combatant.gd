@@ -20,6 +20,7 @@ var charge: int = 0
 var charge_max: int = 100
 var stunned: bool = false
 var pending_dot: int = 0
+var pending_amp: float = 1.0   # relic (Overcharge): bir sonraki cast'e uygulanacak çarpan
 
 func _init(p_side: int, p_source, p_charge_max: int = 100) -> void:
 	side = p_side
@@ -47,6 +48,12 @@ func resist() -> Array:
 
 func take_damage(amount: int) -> void:
 	hp = max(0, hp - amount)
+
+# Şifa (relic lifesteal vb.) — kaynak max_hp'sini aşmaz, ölüyü diriltmez.
+func heal(amount: int) -> void:
+	if hp <= 0 or amount <= 0:
+		return
+	hp = min(source.max_hp, hp + amount)
 
 # --- Şarj barı ---
 

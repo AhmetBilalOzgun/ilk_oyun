@@ -16,6 +16,7 @@ signal node_entered(node)          # RunNode
 signal battle_requested(enemies)   # Array[Enemy] — host savaşı kursun
 signal choice_requested(options)   # Array[ChoiceOption]
 signal choice_applied(option)      # ChoiceOption
+signal transformed(form)           # MageForm — bir seçim büyücüyü dönüştürdü (dopamine anı)
 signal run_ended(won)              # bool
 
 var catalog: SkillCatalog
@@ -57,15 +58,43 @@ func report_battle_result(won: bool) -> void:
 		return
 	_advance()
 
+# Kartları yeniden üret (reroll). Host puan bedelini kendi düşer; burada sadece
+# yeni seçenek seti üretilip tekrar sunulur. RNG ilerler -> her reroll farklı.
+func reroll_choices() -> void:
+	if state != State.AWAITING_CHOICE:
+		return
+	current_choices = ChoiceGenerator.generate(run_state, catalog, rng)
+	choice_requested.emit(current_choices)
+
+# Kart uygulamadan CHOICE'u geç (puan yetmese de takılmasın). Sıradaki düğüme ilerle.
+func skip_choice() -> void:
+	if state != State.AWAITING_CHOICE:
+		return
+	_advance()
+
 func apply_choice(index: int) -> void:
 	if state != State.AWAITING_CHOICE:
 		return
 	if index < 0 or index >= current_choices.size():
 		return
 	var opt: ChoiceOption = current_choices[index]
+	# Dönüşüm keşfi: seçim öncesi/sonrası her büyücünün form id'sini karşılaştır.
+	var before := _form_ids()
 	opt.apply(run_state)
 	choice_applied.emit(opt)
+	var after := _form_ids()
+	for cid in after.keys():
+		if before.get(cid, "") != after[cid]:
+			transformed.emit(run_state.loadout(cid).current_form)
 	_advance()
+
+# char_id -> güncel form id (dönüşüm tespiti için).
+func _form_ids() -> Dictionary:
+	var out: Dictionary = {}
+	for cid in run_state.party_order:
+		var lo: RunLoadout = run_state.loadouts[cid]
+		out[cid] = lo.current_form.id if lo.current_form != null else ""
+	return out
 
 # --- İçsel akış ---
 

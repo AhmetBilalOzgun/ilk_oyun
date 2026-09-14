@@ -19,10 +19,16 @@ func _ready() -> void:
 	title.add_theme_font_size_override("font_size", 64)
 	add_child(title)
 
+	# 20 seviye ekrana sığmaz -> kaydırılabilir liste.
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(180, 260)
+	scroll.custom_minimum_size = Vector2(760, 1400)
+	scroll.size = Vector2(760, 1400)
+	add_child(scroll)
+
 	var box := VBoxContainer.new()
-	box.position = Vector2(180, 260)
 	box.add_theme_constant_override("separation", 32)
-	add_child(box)
+	scroll.add_child(box)
 
 	for i in range(RunContent.level_count()):
 		var unlocked: bool = Meta.is_level_unlocked(i)
