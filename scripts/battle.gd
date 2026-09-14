@@ -96,10 +96,13 @@ const NEXT_TURN_PAUSE := 0.8
 const BATTLE_END_PAUSE := 1.6
 const COMBO_BASE_LEN := 2       # kombo başlangıç tile sayısı (run başı)
 const COMBO_MAX_LEN := 6        # kombo tavan tile sayısı (run ilerledikçe)
-const PIXEL_FONT = preload("res://assets/fonts/PixelOperator8-Bold.ttf")   # savaş bitince: ölüm/zafer/ult anim'i oynasın diye bekle
+const PIXEL_FONT = preload("res://assets/fonts/PixelifySans-Bold.ttf")   # savaş bitince: ölüm/zafer/ult anim'i oynasın diye bekle
 const REVIVE_FRACTION := 0.25   # kazanınca düşen parti üyesi bu oranda dirilir
 const REROLL_COST := 15         # CHOICE kart reroll'unun draft puanı bedeli
+const HEAL_FIXED_COST := 10     # CHOICE'ta sol "CAN AL" butonu orb bedeli
+const HEAL_FIXED_AMOUNT := 25   # sol "CAN AL" butonu tüm partiyi bu kadar iyileştirir
 const WAVE_CHARGE_DECAY := 0.20 # savaşlar (wave) arası taşınan şarjın kaybı (%20)
+const RHYTHM_SPEEDUP_PER_WAVE := 0.12 # her tur (wave) geçtikçe ritim hızına eklenen çarpan
 
 const EFFECT_COLOR := {
 	"Burn": Color(0.95, 0.45, 0.2, 1),
@@ -167,7 +170,7 @@ func _ready() -> void:
 	status_label.size = Vector2(1000, 50)
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_label.add_theme_font_override("font", PIXEL_FONT)
-	status_label.add_theme_font_size_override("font_size", 18)
+	status_label.add_theme_font_size_override("font_size", 32)
 	status_label.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
 	status_label.add_theme_constant_override("outline_size", 6)
 	status_label.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.08, 1.0))
@@ -179,7 +182,7 @@ func _ready() -> void:
 	_flash_label.size = Vector2(1000, 60)
 	_flash_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_flash_label.add_theme_font_override("font", PIXEL_FONT)
-	_flash_label.add_theme_font_size_override("font_size", 28)
+	_flash_label.add_theme_font_size_override("font_size", 40)
 	_flash_label.add_theme_constant_override("outline_size", 8)
 	_flash_label.add_theme_color_override("font_outline_color", Color(0.05, 0.03, 0.1, 1))
 	_flash_label.visible = false
@@ -192,10 +195,10 @@ func _ready() -> void:
 	_last_usec = Time.get_ticks_usec()
 	rm.start(RunContent.stage_nodes(Meta.selected_level), run_state)
 
-func _style_button(btn: Button, accent_color: Color = Color(0.9, 0.75, 0.3), height: float = 78.0) -> void:
-	btn.custom_minimum_size = Vector2(900, height)
+func _style_button(btn: Button, accent_color: Color = Color(0.9, 0.75, 0.3), height: float = 78.0, width: float = 900.0, font_size: int = 30) -> void:
+	btn.custom_minimum_size = Vector2(width, height)
 	btn.add_theme_font_override("font", PIXEL_FONT)
-	btn.add_theme_font_size_override("font_size", 18)
+	btn.add_theme_font_size_override("font_size", font_size)
 
 	var style_normal := StyleBoxFlat.new()
 	style_normal.bg_color = Color(0.08, 0.08, 0.16, 0.94)
@@ -287,38 +290,56 @@ func _on_board_finished(points: int) -> void:
 
 func _show_cards() -> void:
 	_clear_menu()
-	# CHOICE ekranı için ayrı konum + daha ferah aralık (savaş menüsü değerini ezer).
-	skill_menu.position = Vector2(90, 720)
-	skill_menu.add_theme_constant_override("separation", 20)
+	# CHOICE ekranı: TEK SATIR — sol CAN AL (kırmızı +), ortada 3 kutu yan yana, sağ PAS.
+	skill_menu.position = Vector2(90, 700)
+	skill_menu.add_theme_constant_override("separation", 22)
 	status_label.text = "SEÇİM — %d orb  (%s)" % [_orbs, _progress_text()]
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	skill_menu.add_child(row)
+
+	# SOL: CAN AL — büyük kırmızı +, orb bedeli. Yetmezse pasif.
+	var heal := Button.new()
+	var can_heal := _orbs >= HEAL_FIXED_COST
+	heal.text = "+\n\nCAN AL\n[%d orb]" % HEAL_FIXED_COST
+	heal.disabled = not can_heal
+	_style_button(heal, Color(0.95, 0.28, 0.28), 380.0, 150.0, 34)
+	heal.add_theme_color_override("font_color", Color(1.0, 0.42, 0.42))
+	heal.pressed.connect(_on_heal_fixed)
+	row.add_child(heal)
+
+	# ORTA: 3 seçenek kutusu yan yana (ikon üstte, ad ortada, bedel altta).
 	for i in range(_pending_options.size()):
 		var opt: ChoiceOption = _pending_options[i]
-		var btn := Button.new()
 		var afford := _orbs >= opt.cost
-		btn.text = "%s   [%d orb]%s" % [_choice_label(opt), opt.cost,
-			"" if afford else "  (yetersiz)"]
-		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		btn.disabled = not afford
+		var card := Button.new()
+		card.text = "%s\n\n%s\n\n[%d orb]%s" % [_choice_icon(opt), opt.label, opt.cost,
+			"" if afford else "\n(yetersiz)"]
+		card.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		card.disabled = not afford
 		var accent := _choice_color(opt) if afford else Color(0.4, 0.4, 0.45)
-		_style_button(btn, accent, 104.0)
-		btn.pressed.connect(_on_choice_chosen.bind(i))
-		skill_menu.add_child(btn)
+		_style_button(card, accent, 380.0, 196.0, 26)
+		card.pressed.connect(_on_choice_chosen.bind(i))
+		row.add_child(card)
 		# Dönüşüm kartı: mor parıltı ile dikkat çek.
 		if afford and opt.kind == ChoiceOption.Kind.ACQUIRE_RUNE:
-			_pulse_button(btn)
-	# Reroll (orb bedeli) — yeni kart seti.
+			_pulse_button(card)
+
+	# SAĞ: PAS — şekil (»») + etiket.
+	var skip := Button.new()
+	skip.text = "»»\n\nPAS"
+	_style_button(skip, Color(0.6, 0.65, 0.75), 380.0, 150.0, 34)
+	skip.pressed.connect(_on_skip)
+	row.add_child(skip)
+
+	# Alt: reroll (ikincil) — yeni kart seti.
 	var re := Button.new()
 	re.text = "🔄 REROLL  [%d orb]" % REROLL_COST
 	re.disabled = _orbs < REROLL_COST
-	_style_button(re, Color(0.95, 0.7, 0.25), 80.0)
+	_style_button(re, Color(0.95, 0.7, 0.25), 78.0, 900.0, 28)
 	re.pressed.connect(_on_reroll)
 	skill_menu.add_child(re)
-	# Pas (bedava) — puan yetmese de takılmasın.
-	var skip := Button.new()
-	skip.text = "⏩ PAS GEÇ"
-	_style_button(skip, Color(0.6, 0.65, 0.75), 80.0)
-	skip.pressed.connect(_on_skip)
-	skill_menu.add_child(skip)
 
 # Seçenek türüne göre çerçeve rengi (mor=dönüşüm, altın=buff, yeşil=iyileş, turuncu=can).
 func _choice_color(opt: ChoiceOption) -> Color:
@@ -346,17 +367,25 @@ func _on_skip() -> void:
 	_clear_menu()
 	rm.skip_choice()      # -> sıradaki düğüm, kart uygulamadan
 
-func _choice_label(opt: ChoiceOption) -> String:
+# Sol CAN AL butonu: orb bedeliyle tüm partiyi iyileştir, sonra düğümü geç.
+func _on_heal_fixed() -> void:
+	if _orbs < HEAL_FIXED_COST:
+		return
+	_orbs -= HEAL_FIXED_COST
+	for l in run_state.loadouts.values():
+		l.heal(HEAL_FIXED_AMOUNT)
+	_flash("+%d CAN" % HEAL_FIXED_AMOUNT, Color(1.0, 0.42, 0.42))
+	_clear_menu()
+	rm.skip_choice()      # iyileştir + düğümü geç (kart uygulamadan)
+
+# Seçenek kutusunun üst ikonu (etiketten ayrı; kutu içinde büyük gösterilir).
+func _choice_icon(opt: ChoiceOption) -> String:
 	match opt.kind:
-		ChoiceOption.Kind.ACQUIRE_RUNE:
-			return "🔮 %s" % opt.label
-		ChoiceOption.Kind.HEAL:
-			return "❤️ %s" % opt.label
-		ChoiceOption.Kind.MAX_HP:
-			return "➕ %s" % opt.label
-		ChoiceOption.Kind.RELIC:
-			return "🎁 %s" % opt.label
-	return opt.label
+		ChoiceOption.Kind.ACQUIRE_RUNE: return "🔮"
+		ChoiceOption.Kind.HEAL: return "❤"
+		ChoiceOption.Kind.MAX_HP: return "➕"
+		ChoiceOption.Kind.RELIC: return "🎁"
+	return "⭐"
 
 func _on_choice_chosen(index: int) -> void:
 	_clear_menu()
@@ -595,7 +624,10 @@ func _on_input_requested(sequence: InputSequence) -> void:
 	add_child(_rhythm)
 	# Can barlarının üstündeki gökyüzü bölgesinde konumlandır (y = ~600)
 	var ry_y := maxf(160.0, _ground_y() - 680.0)
-	_rhythm.setup(_combo_length(), Rect2(90, ry_y, 900, 320))
+	# Waveler (tur) geçtikçe piano tiles hızlanır. round_index 1'den başlar => ilk wave 1.0x.
+	var waves_passed: int = maxi(0, (tm.round_index if tm != null else 1) - 1)
+	var speed_scale := 1.0 + float(waves_passed) * RHYTHM_SPEEDUP_PER_WAVE
+	_rhythm.setup(_combo_length(), Rect2(90, ry_y, 900, 320), speed_scale)
 
 # Tutturulan her tile bir "vuruş": caster'dan hedefe escalating fireball + hasar sayısı.
 # Finisher (son tile) en büyük ölçek + ult pozu + en büyük sayı. fraction<=0 -> ıska (FX yok).

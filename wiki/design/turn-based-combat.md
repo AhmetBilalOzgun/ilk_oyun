@@ -127,9 +127,12 @@ farklı düzen). Bir çizgiden geçen orb PUAN değil **TOP SAYISI** çoğaltır
 x2→1, x3→2, x4→3; `_on_gate_hit`, klon aynı gate'i tekrar tetiklemez, `MAX_ORBS=90`
 patlama koruması). Dipteki huni tüm orb'ları toplayıcıya yönlendirir; **puan = toplanan
 orb × `ORB_VALUE`** (`OrbBoardResult.score` array-of-1.0 ile çağrılır). Pixel-font +
-altın retro çerçeve (`PixelOperator8-Bold`).
-Sonra kart ekranı: puanla kart al (kart türüne göre `cost`), **reroll** (15 puan)
-veya **pas** (bedava, takılmasın). `ChoiceGenerator` rün draftı + relic'i havuza karıştırır.
+altın retro çerçeve (`PixelifySans-Bold`; 2026-09-14 `PixelOperator8-Bold`'dan geçildi — o font ğ/Ğ/İ/ş/Ş glyph'leri içermiyordu, Türkçe kırıktı).
+Sonra kart ekranı (2026-09-14 yeniden düzen — "çok karışık" → sadeleşti): **tek yatay satır** —
+SOL **CAN AL** (büyük kırmızı `+`, `HEAL_FIXED_COST=10` orb, party +`HEAL_FIXED_AMOUNT=25`;
+`_on_heal_fixed` doğrudan `run_state.loadouts` iyileştirir + `skip_choice`) · ORTA **3 seçenek kutusu
+yan yana** (`_choice_icon` + ad + `cost`; StyleBoxFlat kutu) · SAĞ **PAS** (`»»`, bedava). **reroll**
+(15 puan) satır altında ikincil. `ChoiceGenerator` rün draftı + relic'i havuza karıştırır.
 
 ## Büyü öncesi RİTİM KOMBO minigame (Retro Gesture Tiles) — 2026-09-14 (revize)
 
@@ -160,8 +163,12 @@ ile "hepsi-PERFECT" nihai hasar); toplam ≈ motor `final_damage` (motor otorite
 `_suppress_aggregate_fx` ile bastırılır (projectile/sayı zaten per-tile'da). Sinyaller:
 `tile_resolved(index,total,result,is_finisher,fraction)` + `finished({combo_score,broke,tiles})`.
 Eski enum `submit_input(result)` yolu enemy/no-input için korundu.
-BPM ~115 (`BEAT=0.52`), `SPEED=640`, `_lead=0.55`. Alev büyücüsü asset ihtiyaçları:
-`wiki/design/alev-buyucu-asset-prompt.md`.
+Temel tempo ~94 BPM (`BEAT_BASE=0.64`), `SPEED_BASE=480`, `_lead=0.72`.
+**Wave hızlanması (2026-09-14):** `TurnManager.round_index` her turda (wave) +1; `battle._on_input_requested`
+`speed_scale = 1 + waves_passed·0.12` (`RHYTHM_SPEEDUP_PER_WAVE`) hesaplayıp `RhythmMinigame.setup(...)`'a
+verir. Minigame `_speed=SPEED_BASE·k`, `_beat=BEAT_BASE/k` (uzaysal aralık sabit, notalar hızlanır;
+tavan `SPEED_MAX_SCALE=2.2`). İlk wave 1.0x → piano-tiles savaş uzadıkça hızlanır.
+Alev büyücüsü asset ihtiyaçları: `wiki/design/alev-buyucu-asset-prompt.md`.
 
 ## Relic kartları (MODIFY / POWER SPIKE) — 2026-09-13
 

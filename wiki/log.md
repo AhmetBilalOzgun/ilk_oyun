@@ -8,6 +8,30 @@ updated: 2026-09-06
 
 Append-only. **New entries go at the TOP.** Format:
 
+## [2026-09-14] feature | CHOICE ekranı yeniden düzen + yazılar büyütüldü
+- **Yazı boyutu (kullanıcı: "çok küçük"):** `project.godot` yeni `[gui] theme/default_font_size=32` (global). Override'lar: `battle` status 18→32, flash 28→40, skill button 18→30 (`_style_button` default font_size param); `rhythm_minigame` hint 16→28; `orb_board` mult 26→34, TOPLAYICI 16→24, HUD 16→26; `home` button 22→34.
+- **CHOICE ekranı (kullanıcı: "çok karışık"):** dikey liste → **tek yatay satır** (`HBoxContainer`): **SOL CAN AL** (büyük kırmızı `+`, orb bedeli `HEAL_FIXED_COST=10`, tüm partiyi `HEAL_FIXED_AMOUNT=25` iyileştirir → `_on_heal_fixed` uygular + `skip_choice`) · **ORTA 3 seçenek kutusu yan yana** (ikon üstte `_choice_icon` + ad + bedel; kutu = StyleBoxFlat çerçeve) · **SAĞ PAS** (`»»` şekil + etiket). Reroll ikincil, satır altında.
+- **`_style_button`** artık `width`+`font_size` parametreli. `_choice_label` (ölü kod) silindi, yerine `_choice_icon`.
+- Files: `scripts/battle.gd`, `scripts/orb_board.gd`, `scripts/home.gd`, `scripts/rpg/rhythm_minigame.gd`, `project.godot`.
+
+## [2026-09-14] fix | Türkçe font: PixelOperator8 → Pixelify Sans Bold
+- **Kök neden:** `PixelOperator8-Bold.ttf` (238 glyph) Türkçe `ğ Ğ İ ş Ş` içermiyordu; `allow_system_fallback` bunları pixel-olmayan sistem fontuna düşürüyordu → sanat uyumsuz/kırık. Tüm PixelOperator ailesi (full dahil) bu glyph'leri içermiyor.
+- **Çözüm:** Pixelify Sans (chunky pixel, tam Türkçe) — variable font'tan `wght=700` static Bold instance üretildi (`assets/fonts/PixelifySans-Bold.ttf`, OFL). Kullanıcı 3 aday (Pixelify/Jersey10/Handjet) arasından Pixelify seçti.
+- **`battle.gd`/`home.gd`/`orb_board.gd`/`rhythm_minigame.gd`:** `PIXEL_FONT` preload yeni fonta.
+- **`project.godot`:** yeni `[gui] theme/custom_font=...PixelifySans-Bold.ttf` — global varsayılan font; `characters.gd`/`level_select.gd`/`turn_debug_overlay.gd` (yalnız font_size override eden, önceden default sans kullanan) ekranlar da artık pixel+Türkçe.
+- Eski `PixelOperator8-Bold.ttf` + `.import` + cache fontdata silindi. `.import` yeni fontta editör açılınca üretilir.
+
+## [2026-09-14] feature | Ritim (piano tiles) waveler geçtikçe hızlansın
+- **`turn_manager.gd`:** yeni `round_index` sayacı — `start_battle`'da 0'a döner, her `_start_round`'da +1. Kaç tur (wave) geçtiğini ölçer.
+- **`rhythm_minigame.gd`:** `BEAT`/`SPEED` const → `BEAT_BASE`/`SPEED_BASE` + `_beat`/`_speed` instance. `setup(...)`'a `speed_scale` (default 1.0, tavan `SPEED_MAX_SCALE=2.2`). `_speed=SPEED_BASE*k`, `_beat=BEAT_BASE/k` — uzaysal aralık sabit, notalar daha hızlı gelir.
+- **`battle.gd`:** `_on_input_requested` `tm.round_index`'ten `speed_scale = 1 + waves_passed*RHYTHM_SPEEDUP_PER_WAVE (0.12)` hesaplar, `_rhythm.setup(...)`'a geçer. İlk wave 1.0x.
+
+## [2026-09-14] feature | Haptik: mükemmel isabet + hasar verince telefon titret
+- **`turn_manager.gd` `_apply_action`:** oyuncu (`by_party`) hasar verince `Input.vibrate_handheld(30)`. Yalnız party tarafı — düşman vuruşu/refleks titretmez.
+- **`rhythm_minigame.gd:371`:** MÜKEMMEL isabette `Input.vibrate_handheld(40)` (zaten vardı, doğrulandı).
+- **`export_presets.cfg`:** `permissions/vibrate=false→true` (Android VIBRATE izni olmadan `vibrate_handheld` sessizce çalışmaz).
+- APK yeniden derlendi + telefona kuruldu (adb, Success).
+
 ## [2026-09-14] feature | UX cila: ritim yavaşlatma + ult gösterisi + sembolik beceri butonları + sade buff metni
 - **Ritim yavaşlatıldı (`rhythm_minigame.gd`, kullanıcı):** `BEAT 0.52→0.64` (~94 BPM), `SPEED 640→480`, `_lead 0.55→0.72`, pencereler `PERFECT 0.11→0.13`/`GOOD 0.26→0.30`. Piano-tiles daha okunur/yavaş, tolerans biraz geniş.
 - **Ultimate gösterisi (`battle.gd`):** ult finisher artık temel finisher'dan **görsel olarak ayrı** — yeni `_ultimate_flourish(rune,is_aoe)`: tam ekran renk flaşı (`_screen_flash`) + kamera sarsıntısı (`_screen_shake`, kökü titret→sıfır) + aoe ise tüm düşman parlaması; finisher patlama ölçeği ult'ta 2.1 (temel 1.5). Yalnız `_combo_skill.requires_charge` iken tetiklenir.

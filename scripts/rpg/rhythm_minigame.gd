@@ -19,8 +19,9 @@ signal tile_resolved(index, total, result, is_finisher, fraction)
 # Kombo bitince toplu sonuç: {combo_score: float 0..1, broke: bool, tiles: int}.
 signal finished(payload)
 
-const BEAT := 0.64            # notalar arası süre (sn) ~ 94 BPM (yavaşlatıldı)
-const SPEED := 480.0          # nota kayma hızı (px/sn) — daha okunur/yavaş
+const BEAT_BASE := 0.64       # notalar arası temel süre (sn) ~ 94 BPM
+const SPEED_BASE := 480.0     # nota kayma temel hızı (px/sn)
+const SPEED_MAX_SCALE := 2.2  # hız çarpanı tavanı (waveler geçtikçe artan)
 const PERFECT_WINDOW := 0.13  # ±sn: bu kadar yakınsa PERFECT
 const GOOD_WINDOW := 0.30     # ±sn: bu kadar yakınsa GOOD
 const TAIL := 0.22            # son nota geçtikten sonra bekleme
@@ -28,7 +29,7 @@ const SWIPE_MIN_DIST := 35.0  # jest kaydırma eşiği (px)
 const FINISHER_WEIGHT := 2.0  # son tile'ın hasar ağırlığı (normal tile = 1.0)
 const Q_PERFECT := 1.0        # kalite katsayıları (fraction hesabı)
 const Q_GOOD := 0.6
-const PIXEL_FONT = preload("res://assets/fonts/PixelOperator8-Bold.ttf")
+const PIXEL_FONT = preload("res://assets/fonts/PixelifySans-Bold.ttf")
 
 # 5 yön havuzu — dizi buradan rastgele üretilir.
 const STEP_POOL := [
@@ -44,6 +45,8 @@ var _hit_x: float
 var _track_y: float
 var _spawn_x: float
 var _lead: float              # ilk notanın hedefe varış süresi
+var _beat: float = BEAT_BASE  # bu cast'in nota aralığı (hız ölçeğine göre kısalır)
+var _speed: float = SPEED_BASE # bu cast'in kayma hızı (hız ölçeğine göre artar)
 var _steps: Array = []
 var _notes: Array = []        # {node, t, hit, result, step, is_finisher, weight}
 var _clock := 0.0
@@ -58,8 +61,13 @@ var _touch_active := false
 var _swiped_in_gesture := false
 
 # combo_len: kaç tile (>=1). Son tile FINISHER. Dizi rastgele üretilir.
-func setup(combo_len: int, rect: Rect2) -> void:
+# speed_scale: waveler geçtikçe host'tan gelen hız çarpanı (>=1.0 => daha hızlı).
+func setup(combo_len: int, rect: Rect2, speed_scale: float = 1.0) -> void:
 	_rect = rect
+	var k: float = clampf(speed_scale, 1.0, SPEED_MAX_SCALE)
+	_speed = SPEED_BASE * k
+	# Uzaysal aralık sabit kalsın diye BEAT ters ölçekle kısalır (SPEED*BEAT sabit).
+	_beat = BEAT_BASE / k
 	var n: int = maxi(1, combo_len)
 	_steps = []
 	for i in range(n):
@@ -69,7 +77,7 @@ func setup(combo_len: int, rect: Rect2) -> void:
 	_hit_x = rect.position.x + 160.0
 	_track_y = rect.position.y + rect.size.y * 0.5
 	_lead = 0.72
-	_spawn_x = _hit_x + _lead * SPEED
+	_spawn_x = _hit_x + _lead * _speed
 	_build_frame()
 	_build_notes()
 
@@ -145,14 +153,14 @@ func _build_frame() -> void:
 
 	# Ritim nabzı
 	var pulse := create_tween().set_loops()
-	pulse.tween_property(_ring, "scale", Vector2(1.15, 1.15), BEAT * 0.5).set_trans(Tween.TRANS_SINE)
-	pulse.tween_property(_ring, "scale", Vector2(1.0, 1.0), BEAT * 0.5).set_trans(Tween.TRANS_SINE)
+	pulse.tween_property(_ring, "scale", Vector2(1.15, 1.15), _beat * 0.5).set_trans(Tween.TRANS_SINE)
+	pulse.tween_property(_ring, "scale", Vector2(1.0, 1.0), _beat * 0.5).set_trans(Tween.TRANS_SINE)
 
 	# İpucu etiketi (Pixel Font)
 	_hint = Label.new()
 	_hint.position = Vector2(_rect.position.x + 24.0, _rect.position.y + 12.0)
 	_hint.add_theme_font_override("font", PIXEL_FONT)
-	_hint.add_theme_font_size_override("font_size", 16)
+	_hint.add_theme_font_size_override("font_size", 28)
 	_hint.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
 	_hint.add_theme_constant_override("outline_size", 4)
 	_hint.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.08, 1.0))
@@ -164,7 +172,7 @@ func _build_notes() -> void:
 	for i in range(_steps.size()):
 		var step_val: int = int(_steps[i])
 		var is_fin: bool = i == _steps.size() - 1
-		var t: float = _lead + float(i) * BEAT
+		var t: float = _lead + float(i) * _beat
 		var node := Node2D.new()
 		node.position = Vector2(_spawn_x, _track_y)
 		node.z_index = 2
@@ -273,7 +281,7 @@ func _process(delta: float) -> void:
 		if not is_instance_valid(raw_node):
 			continue
 		var node: Node2D = raw_node
-		var x: float = _hit_x + (float(n["t"]) - _clock) * SPEED
+		var x: float = _hit_x + (float(n["t"]) - _clock) * _speed
 		node.position.x = x
 		if _clock > float(n["t"]) + GOOD_WINDOW:
 			# Iskalandı -> KOMBO KIRILIR (kalan tile'lar düşer, sıra rakibe geçer).
@@ -284,7 +292,7 @@ func _process(delta: float) -> void:
 			_break_combo()
 			return
 	# Bitiş: son nota + kuyruk geçti (kırılmadan tümü çözüldüyse).
-	var last_t: float = _lead + float(maxi(0, _steps.size() - 1)) * BEAT
+	var last_t: float = _lead + float(maxi(0, _steps.size() - 1)) * _beat
 	if _clock > last_t + GOOD_WINDOW + TAIL:
 		_finish()
 

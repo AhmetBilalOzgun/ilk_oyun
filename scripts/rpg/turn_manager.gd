@@ -35,6 +35,7 @@ var state: int = State.IDLE
 var combatants: Array = []
 var order: Array = []
 var turn_index: int = 0
+var round_index: int = 0        # kaç tur (wave) geçti — ritim minigame hızını ölçekler
 var active: Combatant = null
 
 # AWAITING_INPUT sırasında bekleyen eylem (submit_input ile çözülür).
@@ -55,11 +56,13 @@ func start_battle(party: Array, enemies: Array) -> void:
 		combatants.append(Combatant.new(Combatant.Side.PARTY, c, config.charge_max))
 	for e in enemies:
 		combatants.append(Combatant.new(Combatant.Side.ENEMY, e, config.charge_max))
+	round_index = 0
 	_start_round()
 
 # --- Sıra hesaplama ---
 
 func _start_round() -> void:
+	round_index += 1
 	order = []
 	for c in combatants:
 		if c.is_alive():
@@ -180,6 +183,8 @@ func _apply_action(skill: Skill, target: Combatant, cast_bonus: float, quality: 
 	last_breakdown = b
 	target.take_damage(b.final_damage)
 	var by_party := active.side == Combatant.Side.PARTY
+	if by_party:
+		Input.vibrate_handheld(30)   # haptik: oyuncu hasar verince titret
 
 	# Relic: Kan Bağı — oyuncu verdiği hasarın bir kısmını can olarak alır.
 	if by_party and relics.has("lifesteal"):

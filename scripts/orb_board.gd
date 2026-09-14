@@ -24,7 +24,7 @@ const PEG_R := 10.0
 const SETTLE_TIMEOUT := 8.0
 const MAX_ORBS := 90          # patlama koruması (çoğalma üst sınırı)
 const ORB_VALUE := OrbBoardResult.ORB_VALUE
-const PIXEL_FONT = preload("res://assets/fonts/PixelOperator8-Bold.ttf")
+const PIXEL_FONT = preload("res://assets/fonts/PixelifySans-Bold.ttf")
 
 var _rect: Rect2
 var _to_drop := 0             # başlangıçta dökülecek orb sayısı (düşman başına 1)
@@ -162,7 +162,7 @@ func _build_gates() -> void:
 		lbl.text = "x%d" % m
 		lbl.position = Vector2(cx - 24.0, cy - 24.0)
 		lbl.add_theme_font_override("font", PIXEL_FONT)
-		lbl.add_theme_font_size_override("font_size", 26)
+		lbl.add_theme_font_size_override("font_size", 34)
 		lbl.add_theme_constant_override("outline_size", 6)
 		lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 		lbl.add_theme_color_override("font_color", _mult_color(m))
@@ -198,7 +198,7 @@ func _build_funnel() -> void:
 	lbl.text = "TOPLAYICI"
 	lbl.position = Vector2(cx - 56.0, _rect.end.y - 50.0)
 	lbl.add_theme_font_override("font", PIXEL_FONT)
-	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_font_size_override("font_size", 24)
 	lbl.add_theme_color_override("font_color", Color(0.05, 0.15, 0.08))
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(lbl)
@@ -214,7 +214,7 @@ func _build_hud() -> void:
 	_hud = Label.new()
 	_hud.position = Vector2(_rect.position.x + 12.0, _rect.position.y - 48.0)
 	_hud.add_theme_font_override("font", PIXEL_FONT)
-	_hud.add_theme_font_size_override("font_size", 16)
+	_hud.add_theme_font_size_override("font_size", 26)
 	_hud.add_theme_color_override("font_color", Color(1.0, 0.9, 0.35))
 	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_hud)

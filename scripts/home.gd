@@ -60,7 +60,7 @@ func _on_buy_crystal() -> void:
 	Meta.add_crystal(5)   # IAP stub
 	_refresh_currency()
 
-const PIXEL_FONT = preload("res://assets/fonts/PixelOperator8-Bold.ttf")
+const PIXEL_FONT = preload("res://assets/fonts/PixelifySans-Bold.ttf")
 
 func _label(text: String, fsize: int, pos: Vector2) -> Label:
 	var l := Label.new()
@@ -77,6 +77,6 @@ func _button(text: String, cb: Callable) -> Button:
 	b.text = text
 	b.custom_minimum_size = Vector2(720, 110)
 	b.add_theme_font_override("font", PIXEL_FONT)
-	b.add_theme_font_size_override("font_size", 22)
+	b.add_theme_font_size_override("font_size", 34)
 	b.pressed.connect(cb)
 	return b
