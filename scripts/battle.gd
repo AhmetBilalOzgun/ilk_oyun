@@ -626,7 +626,10 @@ func _on_input_requested(sequence: InputSequence) -> void:
 	var ry_y := maxf(160.0, _ground_y() - 680.0)
 	# Waveler (tur) geçtikçe piano tiles hızlanır. round_index 1'den başlar => ilk wave 1.0x.
 	var waves_passed: int = maxi(0, (tm.round_index if tm != null else 1) - 1)
-	var speed_scale := 1.0 + float(waves_passed) * RHYTHM_SPEEDUP_PER_WAVE
+	var wave_scale := 1.0 + float(waves_passed) * RHYTHM_SPEEDUP_PER_WAVE
+	# Adaptive: oyuncunun gerçek oynayışına göre (kalıcı profil + oturum) hızı ölçekle.
+	# 20 de 60 yaş da zevk alsın; kötü gün/el değişimi oturum skill'iyle yakalanır.
+	var speed_scale := wave_scale * Meta.rhythm_speed_scale()
 	_rhythm.setup(_combo_length(), Rect2(90, ry_y, 900, 320), speed_scale)
 
 # Tutturulan her tile bir "vuruş": caster'dan hedefe escalating fireball + hasar sayısı.
@@ -675,6 +678,8 @@ func _on_rhythm_finished(payload: Dictionary) -> void:
 		_rhythm = null
 	var score: float = float(payload.get("combo_score", 0.0))
 	var broke: bool = bool(payload.get("broke", false))
+	# Adaptive zorluk: bu cast'in performansını skill profiline işle (bir sonraki hızı ayarlar).
+	Meta.record_rhythm_result(score, broke)
 	if broke:
 		_flash("💥 KOMBO KIRILDI!", Color(1.0, 0.4, 0.35), 1.2)
 	if tm != null:

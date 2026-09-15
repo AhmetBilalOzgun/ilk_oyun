@@ -22,6 +22,24 @@ const POWER_COST_BASE := 75
 const HP_STEP := 15                   # CAN seviyesi başına +max HP
 const POWER_STEP := 4                 # HASAR seviyesi başına +flat hasar
 
+# --- Adaptif ritim zorluğu (piano tiles hızı) ---
+# Oyun reflekse dayalı: 20 de 60 yaş da zevk alsın diye piano tiles HIZI oyuncunun
+# gerçek oynayışına göre kendini ayarlar. İki hız ölçeği (skill) tutulur:
+#   rhythm_skill  = KALICI global profil (kaydedilir) — yavaş öğrenir, "bu oyuncu
+#                   genel olarak ne kadar hızlı" der.
+#   _rhythm_session = OTURUM içi (RAM, kaydedilmez) — hızlı tepki verir: kötü gün
+#                   ya da eli başkasına verme durumunu birkaç cast'te yakalar.
+# Efektif hız çarpanı = ikisinin harmanı (rhythm_speed_scale). Kombo bitince
+# record_rhythm_result çağrılır: skor hedefin üstündeyse hızlan, altındaysa yavaşla.
+const RHYTHM_SKILL_DEFAULT := 1.0     # yeni oyuncu: nötr çarpan (bugünkü davranış)
+const RHYTHM_SKILL_MIN := 0.6         # en yavaş (yeni/60 yaş/kötü gün)
+const RHYTHM_SKILL_MAX := 1.6         # en hızlı (usta refleks)
+const RHYTHM_TARGET_SCORE := 0.82     # hedef kombo skoru (0..1): tuttur => hız sabit
+const RHYTHM_GLOBAL_GAIN := 0.020     # kalıcı skill kazancı/cast (yavaş, uzun vadeli)
+const RHYTHM_SESSION_GAIN := 0.080    # oturum skill kazancı/cast (hızlı tepki)
+const RHYTHM_SESSION_WEIGHT := 0.6    # efektif hız: %60 oturum + %40 kalıcı
+const RHYTHM_BROKE_ERR := -0.30       # kombo kırıldı: en az bu kadar "çok zor" sinyali
+
 enum Track { HP, POWER }
 
 var gold: int = 0
@@ -33,6 +51,8 @@ var selected_level: int = 0           # level_select -> battle arası taşıyıc
 var owned_equipment: Array = []       # sahip olunan ekipman id'leri
 var equipped: Dictionary = {}         # str(slot) -> ekipman id (slot başına bir parça)
 var persist: bool = true              # false -> save/load devre dışı (test)
+var rhythm_skill: float = RHYTHM_SKILL_DEFAULT  # KALICI ritim hız skill'i (kaydedilir)
+var _rhythm_session: float = -1.0     # OTURUM ritim skill'i (RAM; <0 => henüz tohumlanmadı)
 
 func _ready() -> void:
 	load_game()
@@ -149,6 +169,35 @@ func equipped_speed_bonus() -> int:
 			total += int(e.amount)
 	return total
 
+# --- Adaptif ritim zorluğu ---
+
+# Oturum skill'i ilk kullanımda kalıcı profilden tohumlanır (usta oyuncu baştan
+# sürünmesin). Oturum RAM'de yaşar; uygulama kapanınca sıfırlanır (yeni oturum).
+func _rhythm_session_skill() -> float:
+	if _rhythm_session < 0.0:
+		_rhythm_session = rhythm_skill
+	return _rhythm_session
+
+# Bir sonraki cast'in piano tiles hız çarpanı: oturum (hızlı) + kalıcı (yavaş) harmanı.
+# battle.gd bunu wave hız ölçeğiyle çarpar. Aralık [MIN, MAX].
+func rhythm_speed_scale() -> float:
+	var blended: float = rhythm_skill * (1.0 - RHYTHM_SESSION_WEIGHT) \
+		+ _rhythm_session_skill() * RHYTHM_SESSION_WEIGHT
+	return clampf(blended, RHYTHM_SKILL_MIN, RHYTHM_SKILL_MAX)
+
+# Kombo bitince çağrılır (combo_score 0..1, broke: kombo kırıldı mı). Skoru hedefe
+# göre değerlendirir; iki skill EMA'sını (kalıcı yavaş + oturum hızlı) günceller ve
+# kalıcıyı kaydeder. İyi oynadı => hızlan; zorlandı/kırıldı => yavaşla (fail-soft).
+func record_rhythm_result(combo_score: float, broke: bool) -> void:
+	var err: float = clampf(combo_score, 0.0, 1.0) - RHYTHM_TARGET_SCORE
+	if broke:
+		err = minf(err, RHYTHM_BROKE_ERR)   # kırılma => en az bu kadar "çok zor"
+	rhythm_skill = clampf(rhythm_skill + err * RHYTHM_GLOBAL_GAIN,
+		RHYTHM_SKILL_MIN, RHYTHM_SKILL_MAX)
+	_rhythm_session = clampf(_rhythm_session_skill() + err * RHYTHM_SESSION_GAIN,
+		RHYTHM_SKILL_MIN, RHYTHM_SKILL_MAX)
+	save_game()
+
 # --- Kalıcılık ---
 
 func to_dict() -> Dictionary:
@@ -160,6 +209,7 @@ func to_dict() -> Dictionary:
 		"selected_character": selected_character,
 		"owned_equipment": owned_equipment,
 		"equipped": equipped,
+		"rhythm_skill": rhythm_skill,
 	}
 
 func from_dict(d: Dictionary) -> void:
@@ -170,6 +220,8 @@ func from_dict(d: Dictionary) -> void:
 	selected_character = String(d.get("selected_character", ""))
 	owned_equipment = d.get("owned_equipment", [])
 	equipped = d.get("equipped", {})
+	rhythm_skill = clampf(float(d.get("rhythm_skill", RHYTHM_SKILL_DEFAULT)),
+		RHYTHM_SKILL_MIN, RHYTHM_SKILL_MAX)
 
 # Aktif büyücüyü seç (oyun başı / karakterler ekranı) + kalıcı kaydet.
 func select_character(char_id: String) -> void:

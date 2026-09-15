@@ -8,6 +8,16 @@ updated: 2026-09-06
 
 Append-only. **New entries go at the TOP.** Format:
 
+## [2026-09-15] feature | Adaptive ritim zorluğu (piano tiles hızı oyuncuya uyar)
+- **Neden:** oyun reflekse dayalı — 20 de 60 yaş da zevk alsın diye piano tiles HIZI oyuncunun gerçek oynayışına göre kendini ayarlar. Adaptive olan tek şey ritim hızı.
+- **İki skill (hız çarpanı) — `meta_progress.gd`:** `rhythm_skill` = KALICI global profil (kaydedilir, `RHYTHM_GLOBAL_GAIN=0.020`/cast, yavaş öğrenir) + `_rhythm_session` = OTURUM (RAM, kaydedilmez, `RHYTHM_SESSION_GAIN=0.080`/cast, hızlı tepki → kötü gün / el değişimi). Oturum ilk kullanımda kalıcıdan tohumlanır; uygulama kapanınca sıfırlanır.
+- **`record_rhythm_result(combo_score, broke)`:** `err = score − RHYTHM_TARGET_SCORE(0.82)`; kırılınca `err=min(err,−0.30)`. İki EMA'yı clamp'li günceller ([`RHYTHM_SKILL_MIN=0.6`, `MAX=1.6`]) + kaydeder. İyi oynadı→hızlan, zorlandı→yavaşla (fail-soft, kolaylaşma agresif).
+- **`rhythm_speed_scale()`:** efektif çarpan = `%40 kalıcı + %60 oturum` (`RHYTHM_SESSION_WEIGHT=0.6`), clamp'li.
+- **`rhythm_minigame.gd`:** yeni `SPEED_MIN_SCALE=0.6`; `setup` clamp tabanı `1.0`→`SPEED_MIN_SCALE` (adaptive artık base ALTINA inip yeni/60 yaş için gerçekten yavaşlatabilir).
+- **`battle.gd`:** `_on_input_requested` `speed_scale = wave_scale × Meta.rhythm_speed_scale()`; `_on_rhythm_finished` `Meta.record_rhythm_result(score, broke)` çağırır.
+- **Kayıt:** `rhythm_skill` `to_dict`/`from_dict`'e eklendi (clamp'li geri yüklenir). Test: `test_meta_progress.gd` `_test_rhythm_adaptive` (default nötr / hızlanma / yavaşlama / clamp / oturum-hızlı-tepki / round-trip). Suite: 179 geçti.
+- Files: `scripts/meta/meta_progress.gd`, `scripts/rpg/rhythm_minigame.gd`, `scripts/battle.gd`, `tests/test_meta_progress.gd`. → [[Turn-Based Savaş ve QTE]]
+
 ## [2026-09-14] feature | CHOICE ekranı yeniden düzen + yazılar büyütüldü
 - **Yazı boyutu (kullanıcı: "çok küçük"):** `project.godot` yeni `[gui] theme/default_font_size=32` (global). Override'lar: `battle` status 18→32, flash 28→40, skill button 18→30 (`_style_button` default font_size param); `rhythm_minigame` hint 16→28; `orb_board` mult 26→34, TOPLAYICI 16→24, HUD 16→26; `home` button 22→34.
 - **CHOICE ekranı (kullanıcı: "çok karışık"):** dikey liste → **tek yatay satır** (`HBoxContainer`): **SOL CAN AL** (büyük kırmızı `+`, orb bedeli `HEAL_FIXED_COST=10`, tüm partiyi `HEAL_FIXED_AMOUNT=25` iyileştirir → `_on_heal_fixed` uygular + `skip_choice`) · **ORTA 3 seçenek kutusu yan yana** (ikon üstte `_choice_icon` + ad + bedel; kutu = StyleBoxFlat çerçeve) · **SAĞ PAS** (`»»` şekil + etiket). Reroll ikincil, satır altında.

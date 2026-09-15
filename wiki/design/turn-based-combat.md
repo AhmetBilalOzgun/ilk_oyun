@@ -2,8 +2,8 @@
 type: design
 title: "Turn-Based Savaş ve QTE"
 created: 2026-09-10
-updated: 2026-09-14
-verified: 2026-09-14  # ritim KOMBO dövüşü (rastgele dizi + per-tile büyü + finisher + haptik + submit_input_multiplier)
+updated: 2026-09-15
+verified: 2026-09-15  # + adaptive ritim zorluğu (piano tiles hızı: kalıcı+oturum skill, Meta.rhythm_speed_scale/record_rhythm_result)
 tags:
   - design
   - system
@@ -77,6 +77,12 @@ code_anchors:
     file: scripts/rpg/run/run_content.gd
   - repo: game
     symbol: MetaProgress
+    file: scripts/meta/meta_progress.gd
+  - repo: game
+    symbol: MetaProgress.rhythm_speed_scale
+    file: scripts/meta/meta_progress.gd
+  - repo: game
+    symbol: MetaProgress.record_rhythm_result
     file: scripts/meta/meta_progress.gd
 ---
 
@@ -165,9 +171,20 @@ ile "hepsi-PERFECT" nihai hasar); toplam ≈ motor `final_damage` (motor otorite
 Eski enum `submit_input(result)` yolu enemy/no-input için korundu.
 Temel tempo ~94 BPM (`BEAT_BASE=0.64`), `SPEED_BASE=480`, `_lead=0.72`.
 **Wave hızlanması (2026-09-14):** `TurnManager.round_index` her turda (wave) +1; `battle._on_input_requested`
-`speed_scale = 1 + waves_passed·0.12` (`RHYTHM_SPEEDUP_PER_WAVE`) hesaplayıp `RhythmMinigame.setup(...)`'a
-verir. Minigame `_speed=SPEED_BASE·k`, `_beat=BEAT_BASE/k` (uzaysal aralık sabit, notalar hızlanır;
-tavan `SPEED_MAX_SCALE=2.2`). İlk wave 1.0x → piano-tiles savaş uzadıkça hızlanır.
+`wave_scale = 1 + waves_passed·0.12` (`RHYTHM_SPEEDUP_PER_WAVE`) hesaplar. Minigame `_speed=SPEED_BASE·k`,
+`_beat=BEAT_BASE/k` (uzaysal aralık sabit, notalar hızlanır; tavan `SPEED_MAX_SCALE=2.2`). İlk wave 1.0x.
+**Adaptive zorluk (2026-09-15, verified 2026-09-15):** oyun reflekse dayalı — 20 de 60 yaş da zevk alsın
+diye piano tiles hızı oyuncunun gerçek oynayışına göre kendini ayarlar (adaptive olan TEK şey ritim hızı).
+`speed_scale = wave_scale × Meta.rhythm_speed_scale()`. `MetaProgress` iki hız-skill'i tutar: `rhythm_skill`
+KALICI global profil (kaydedilir, `RHYTHM_GLOBAL_GAIN=0.020`/cast — yavaş öğrenir) + `_rhythm_session`
+OTURUM (RAM, kaydedilmez, `RHYTHM_SESSION_GAIN=0.080`/cast — hızlı tepki: kötü gün / eli başkasına verme).
+Oturum ilk kullanımda kalıcıdan tohumlanır, uygulama kapanınca sıfırlanır. `rhythm_speed_scale()` = `%40
+kalıcı + %60 oturum` (`RHYTHM_SESSION_WEIGHT=0.6`), `[RHYTHM_SKILL_MIN=0.6, MAX=1.6]` kırpılır.
+`battle._on_rhythm_finished` → `Meta.record_rhythm_result(combo_score, broke)`: `err = score − 0.82`
+(`RHYTHM_TARGET_SCORE`), kırılınca `err=min(err,−0.30)`; iki EMA'yı günceller + kaydeder (iyi→hızlan,
+zorlandı→yavaşla, kolaylaşma agresif). `rhythm_minigame.setup` clamp tabanı `1.0`→`SPEED_MIN_SCALE=0.6`
+(adaptive artık base ALTINA inip yeni/60 yaş için gerçekten yavaşlatabilir). Test: `test_meta_progress.gd`
+`_test_rhythm_adaptive`.
 Alev büyücüsü asset ihtiyaçları: `wiki/design/alev-buyucu-asset-prompt.md`.
 
 ## Relic kartları (MODIFY / POWER SPIKE) — 2026-09-13

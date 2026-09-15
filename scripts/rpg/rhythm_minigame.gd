@@ -21,6 +21,7 @@ signal finished(payload)
 
 const BEAT_BASE := 0.64       # notalar arası temel süre (sn) ~ 94 BPM
 const SPEED_BASE := 480.0     # nota kayma temel hızı (px/sn)
+const SPEED_MIN_SCALE := 0.6  # hız çarpanı tabanı (<1.0: adaptive kolaylaştırma — yeni/60 yaş)
 const SPEED_MAX_SCALE := 2.2  # hız çarpanı tavanı (waveler geçtikçe artan)
 const PERFECT_WINDOW := 0.13  # ±sn: bu kadar yakınsa PERFECT
 const GOOD_WINDOW := 0.30     # ±sn: bu kadar yakınsa GOOD
@@ -61,10 +62,11 @@ var _touch_active := false
 var _swiped_in_gesture := false
 
 # combo_len: kaç tile (>=1). Son tile FINISHER. Dizi rastgele üretilir.
-# speed_scale: waveler geçtikçe host'tan gelen hız çarpanı (>=1.0 => daha hızlı).
+# speed_scale: host'tan gelen hız çarpanı = wave ölçeği × adaptive skill (Meta).
+#   >1.0 => daha hızlı, <1.0 => daha yavaş. [SPEED_MIN_SCALE, SPEED_MAX_SCALE] kırpılır.
 func setup(combo_len: int, rect: Rect2, speed_scale: float = 1.0) -> void:
 	_rect = rect
-	var k: float = clampf(speed_scale, 1.0, SPEED_MAX_SCALE)
+	var k: float = clampf(speed_scale, SPEED_MIN_SCALE, SPEED_MAX_SCALE)
 	_speed = SPEED_BASE * k
 	# Uzaysal aralık sabit kalsın diye BEAT ters ölçekle kısalır (SPEED*BEAT sabit).
 	_beat = BEAT_BASE / k

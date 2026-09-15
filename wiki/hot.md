@@ -1,8 +1,8 @@
 ---
 type: meta
 title: "Hot Cache"
-updated: 2026-09-14
-verified: 2026-09-14  # ritim KOMBO dövüşü (rastgele dizi + per-tile büyü + finisher + haptik) + submit_input_multiplier
+updated: 2026-09-15
+verified: 2026-09-15  # + adaptive ritim zorluğu (piano tiles hızı kalıcı+oturum skille uyar)
 ---
 
 # Recent Context
@@ -11,6 +11,8 @@ verified: 2026-09-14  # ritim KOMBO dövüşü (rastgele dizi + per-tile büyü 
 > Any product/build-state claim below older than 14 days is a **hypothesis, not a fact** (see Staleness Contract in `CLAUDE.md`). Verify against code, graph, or the running build before acting, then bump `verified:`.
 
 ## Last Updated
+2026-09-15 — **ADAPTIVE RİTİM ZORLUĞU (piano tiles hızı oyuncuya uyar)** (verified 2026-09-15): Kullanıcı — oyun reflekse dayalı; 20 de 60 yaş da zevk alsın diye piano tiles HIZI oyuncunun oynayışına uysun. Hem genel profil hem oturum-bazlı (kötü gün / eli başkasına verme). **Adaptive olan TEK şey ritim hızı.** `MetaProgress` iki hız-skill'i tutar: `rhythm_skill` KALICI global (kaydedilir, `RHYTHM_GLOBAL_GAIN=0.020`/cast — yavaş) + `_rhythm_session` OTURUM (RAM, kaydedilmez, `SESSION_GAIN=0.080`/cast — hızlı tepki). Oturum ilk kullanımda kalıcıdan tohumlanır, uygulama kapanınca sıfırlanır. `rhythm_speed_scale()` = `%40 kalıcı + %60 oturum` (`SESSION_WEIGHT=0.6`), `[MIN=0.6, MAX=1.6]` clamp. `battle._on_input_requested` `speed_scale = wave_scale × Meta.rhythm_speed_scale()`; `_on_rhythm_finished` → `Meta.record_rhythm_result(combo_score, broke)`: `err = score − 0.82`, kırılınca `err=min(err,−0.30)`; iyi→hızlan, zorlandı→yavaşla (kolaylaşma agresif). `rhythm_minigame.setup` clamp tabanı `1.0`→`SPEED_MIN_SCALE=0.6` (base ALTINA inip yeni/60 yaş için gerçekten yavaşlar). Test **179 geçti** (`_test_rhythm_adaptive`). Telefonda elle doğrulanmalı. → log.md, [[Turn-Based Savaş ve QTE]]
+(önceki: **CHOICE EKRANI YENİDEN DÜZEN + YAZILAR BÜYÜTÜLDÜ**)
 2026-09-14 — **CHOICE EKRANI YENİDEN DÜZEN + YAZILAR BÜYÜTÜLDÜ** (verified 2026-09-14): Kullanıcı — yazılar çok küçük + wave-arası seçim ekranı çok karışık. **(1)** Global `project.godot [gui] theme/default_font_size=32`; battle status 18→32/flash→40/skill btn→30, rhythm hint→28, orb_board 26→34 & 16→24/26, home btn→34. **(2)** CHOICE dikey liste → **tek yatay satır**: SOL **CAN AL** (kırmızı `+`, `HEAL_FIXED_COST=10` orb, party +`25`; `_on_heal_fixed`→heal+`skip_choice`) · ORTA **3 kutu yan yana** (`_choice_icon`+ad+bedel, StyleBoxFlat kutu) · SAĞ **PAS** (`»»`). Reroll ikincil altta. `_style_button` width+font_size param'lı; `_choice_label` silindi. Telefonda elle doğrulanmalı. → log.md, [[Turn-Based Savaş ve QTE]]
 (önceki: **TÜRKÇE FONT: PIXELOPERATOR → PIXELIFY SANS BOLD**)
 2026-09-14 — **TÜRKÇE FONT: PIXELOPERATOR → PIXELIFY SANS BOLD** (verified 2026-09-14): Kullanıcı — genel fontta Türkçe karakter sıkıntısı. Kök neden: `PixelOperator8-Bold` `ğ Ğ İ ş Ş` glyph'lerini içermiyor (tüm PixelOperator ailesi içermiyor), sistem fallback pixel-olmayan fonta düşürüyordu. Çözüm: **Pixelify Sans** (chunky pixel, tam Türkçe, OFL) — variable'dan `wght=700` static Bold instance (`assets/fonts/PixelifySans-Bold.ttf`). 4 script `PIXEL_FONT` preload güncellendi (`battle`/`home`/`orb_board`/`rhythm_minigame`); `project.godot` yeni `[gui] theme/custom_font` = global varsayılan → yalnız font_size override eden ekranlar (characters/level_select/turn_debug_overlay) da pixel+Türkçe. Eski font+import silindi. `.import` editör açılınca üretilir; telefonda elle doğrulanmalı. → log.md, [[Turn-Based Savaş ve QTE]]
