@@ -22,6 +22,14 @@ const POWER_COST_BASE := 75
 const HP_STEP := 15                   # CAN seviyesi başına +max HP
 const POWER_STEP := 4                 # HASAR seviyesi başına +flat hasar
 
+# --- Mastery (battle-pass) ---
+# Oyuncu oynadıkça mastery XP kazanır; MasteryTrack barları dolunca SIRAYLA ödüller
+# açılır (arketipler + eşya + para). Açılan arketip CHOICE havuzunda çıkabilir hale
+# gelir (bkz ChoiceGenerator + RunState.unlocked_archetypes). Kazanç savaş başına.
+const MASTERY_PER_WIN := 12           # normal savaş zaferi
+const MASTERY_ELITE_BONUS := 15       # ELITE savaş ek mastery
+const MASTERY_BOSS_BONUS := 20        # BOSS savaş ek mastery
+
 # --- Adaptif ritim zorluğu (piano tiles hızı) ---
 # Oyun reflekse dayalı: 20 de 60 yaş da zevk alsın diye piano tiles HIZI oyuncunun
 # gerçek oynayışına göre kendini ayarlar. İki hız ölçeği (skill) tutulur:
@@ -48,11 +56,16 @@ var cleared_levels: int = 0           # bitmiş seviye sayısı (açık = i <= c
 var upgrades: Dictionary = {}         # char_id -> {"hp":int, "power":int}
 var selected_character: String = ""   # oyun başı seçilen büyücü; "" -> ilk
 var selected_level: int = 0           # level_select -> battle arası taşıyıcı
+var endless_run: bool = false         # home -> battle taşıyıcı: bu run endless mi (kaydedilmez)
+var endless_best_depth: int = 0       # endless en iyi kat (kalıcı, home'da gösterilir)
 var owned_equipment: Array = []       # sahip olunan ekipman id'leri
 var equipped: Dictionary = {}         # str(slot) -> ekipman id (slot başına bir parça)
 var persist: bool = true              # false -> save/load devre dışı (test)
 var rhythm_skill: float = RHYTHM_SKILL_DEFAULT  # KALICI ritim hız skill'i (kaydedilir)
 var _rhythm_session: float = -1.0     # OTURUM ritim skill'i (RAM; <0 => henüz tohumlanmadı)
+var mastery: int = 0                  # battle-pass XP (oynadıkça birikir, kaydedilir)
+var claimed_tiers: int = 0            # uygulanmış tier ödülü sayısı (çifte ödül önler)
+var unlocked_archetypes: Array = []   # açılan arketip id'leri (CHOICE'ta çıkabilir)
 
 func _ready() -> void:
 	load_game()
@@ -109,6 +122,47 @@ func convert_crystal(n: int) -> bool:
 	gold += n * CRYSTAL_TO_GOLD
 	save_game()
 	return true
+
+# --- Mastery (battle-pass) ---
+
+# Mastery XP ekle (savaş zaferinde). Ödül UYGULAMAZ — oyuncu ana ekranda ELLE TOPLAR
+# (claim_next). Böylece "aç -> topla" dopamin anı ve ödül gösterisi olur. Kalıcı kaydeder.
+func add_mastery(n: int) -> void:
+	mastery += max(0, n)
+	save_game()
+
+# Hak edilmiş ama henüz toplanmamış tier sayısı (home'da "TOPLA (n)" butonu bunu okur).
+func claimable_count() -> int:
+	return maxi(0, MasteryTrack.reached_tiers(mastery) - claimed_tiers)
+
+# Sıradaki hak edilmiş tier ödülünü uygula (arketip/eşya/para) ve tier dict'ini döndür
+# (UI ödül gösterisi için). Toplanacak ödül yoksa {} döner. Çifte ödül yok (claimed_tiers).
+func claim_next() -> Dictionary:
+	if claimable_count() <= 0:
+		return {}
+	var t := MasteryTrack.tier(claimed_tiers)
+	_apply_tier_reward(t)
+	claimed_tiers += 1
+	save_game()
+	return t
+
+func _apply_tier_reward(t: Dictionary) -> void:
+	match String(t.get("type", "")):
+		"archetype":
+			var aid := String(t["value"])
+			if aid not in unlocked_archetypes:
+				unlocked_archetypes.append(aid)
+		"equipment":
+			var eid := String(t["value"])
+			if eid not in owned_equipment:
+				owned_equipment.append(eid)
+		"gold":
+			gold += int(t["value"])
+		"crystal":
+			crystal += int(t["value"])
+
+func is_archetype_unlocked(id: String) -> bool:
+	return id in unlocked_archetypes
 
 # --- Seviye ilerlemesi ---
 
@@ -210,6 +264,10 @@ func to_dict() -> Dictionary:
 		"owned_equipment": owned_equipment,
 		"equipped": equipped,
 		"rhythm_skill": rhythm_skill,
+		"mastery": mastery,
+		"claimed_tiers": claimed_tiers,
+		"unlocked_archetypes": unlocked_archetypes,
+		"endless_best_depth": endless_best_depth,
 	}
 
 func from_dict(d: Dictionary) -> void:
@@ -222,6 +280,10 @@ func from_dict(d: Dictionary) -> void:
 	equipped = d.get("equipped", {})
 	rhythm_skill = clampf(float(d.get("rhythm_skill", RHYTHM_SKILL_DEFAULT)),
 		RHYTHM_SKILL_MIN, RHYTHM_SKILL_MAX)
+	mastery = int(d.get("mastery", 0))
+	claimed_tiers = int(d.get("claimed_tiers", 0))
+	unlocked_archetypes = d.get("unlocked_archetypes", [])
+	endless_best_depth = int(d.get("endless_best_depth", 0))
 
 # Aktif büyücüyü seç (oyun başı / karakterler ekranı) + kalıcı kaydet.
 func select_character(char_id: String) -> void:

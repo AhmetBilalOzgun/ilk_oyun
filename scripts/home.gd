@@ -32,12 +32,18 @@ func _ready() -> void:
 	who.add_theme_color_override("font_color", Color(0.6, 0.85, 1.0))
 	add_child(who)
 
+	_build_mastery_bar()
+
 	var box := VBoxContainer.new()
 	box.position = Vector2(180, 560)
 	box.add_theme_constant_override("separation", 40)
 	add_child(box)
 
 	box.add_child(_button("OYNA", _on_play))
+	var endless_txt := "♾ ENDLESS"
+	if Meta.endless_best_depth > 0:
+		endless_txt += "  (en iyi: %d kat)" % Meta.endless_best_depth
+	box.add_child(_button(endless_txt, _on_endless))
 	box.add_child(_button("KARAKTERLER", _on_characters))
 	box.add_child(_button("KRİSTAL → ALTIN", _on_convert))
 	box.add_child(_button("KRİSTAL AL (test +5)", _on_buy_crystal))
@@ -46,8 +52,100 @@ func _ready() -> void:
 func _refresh_currency() -> void:
 	_currency.text = "💰 Altın: %d      💎 Kristal: %d" % [Meta.gold, Meta.crystal]
 
+# Battle-pass mastery çubuğu: oynadıkça dolar; dolunca sıradaki ödül açılır.
+func _build_mastery_bar() -> void:
+	var group := Control.new()
+	group.name = "MasteryGroup"
+	group.set_anchors_preset(Control.PRESET_FULL_RECT)
+	group.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(group)
+
+	var m: int = Meta.mastery
+	var nxt: int = MasteryTrack.next_need(m)
+	var prev: int = MasteryTrack.prev_need(m)
+	var frac: float = 1.0 if nxt < 0 else float(m - prev) / float(max(1, nxt - prev))
+	var done: int = Meta.claimed_tiers
+	var total: int = MasteryTrack.tier_count()
+
+	var head := _label("🎖 MASTERY  %d/%d" % [done, total], 36, Vector2(60, 440))
+	head.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+	group.add_child(head)
+
+	var bar := ProgressBar.new()
+	bar.position = Vector2(60, 476)
+	bar.custom_minimum_size = Vector2(840, 30)
+	bar.min_value = 0.0
+	bar.max_value = 1.0
+	bar.value = frac
+	bar.show_percentage = false
+	group.add_child(bar)
+
+	var nxt_text: String = "Tüm ödüller açıldı 🎉" if nxt < 0 else \
+		"Sıradaki: %s  (%d / %d)" % [MasteryTrack.next_label(m), m, nxt]
+	var sub := _label(nxt_text, 30, Vector2(60, 512))
+	sub.add_theme_color_override("font_color", Color(0.8, 0.85, 0.95))
+	group.add_child(sub)
+
+	# Hak edilmiş ödül varsa: elle TOPLA butonu (aç -> topla dopamin anı). Her basış 1 tier.
+	if Meta.claimable_count() > 0:
+		var claim := Button.new()
+		claim.text = "🎁 TOPLA (%d)" % Meta.claimable_count()
+		claim.position = Vector2(920, 470)
+		claim.custom_minimum_size = Vector2(280, 60)
+		claim.add_theme_font_override("font", PIXEL_FONT)
+		claim.add_theme_font_size_override("font_size", 30)
+		claim.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+		claim.pressed.connect(_on_claim)
+		claim.name = "ClaimButton"
+		group.add_child(claim)
+		# Dikkat çeksin: nabız.
+		var tw := create_tween().set_loops()
+		tw.tween_property(claim, "modulate", Color(1.4, 1.2, 0.6, 1.0), 0.6).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(claim, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.6).set_trans(Tween.TRANS_SINE)
+
+# TOPLA: sıradaki tier ödülünü uygula + gösterisi. Sonra mastery barı + parayı tazele.
+func _on_claim() -> void:
+	var reward := Meta.claim_next()
+	if reward.is_empty():
+		return
+	_show_reward_popup(String(reward.get("label", "Ödül")))
+	_rebuild_mastery()
+	_refresh_currency()
+
+# Mevcut mastery UI elemanlarını (bar/başlık/alt/TOPLA) kaldırıp yeniden çiz.
+func _rebuild_mastery() -> void:
+	for n in get_children():
+		if n is Control and n.name == "MasteryGroup":
+			n.queue_free()
+	_build_mastery_bar()
+
+# Ödül gösterisi: ekran ortasında büyük kart, ~1.6s sonra söner.
+func _show_reward_popup(label: String) -> void:
+	var panel := ColorRect.new()
+	panel.color = Color(0.06, 0.05, 0.12, 0.92)
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(panel)
+	var l := _label("🎁 AÇILDI\n\n%s" % label, 64, Vector2(0, 700))
+	l.size = Vector2(get_viewport_rect().size.x, 400)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_color_override("font_color", Color(1.0, 0.9, 0.45))
+	panel.add_child(l)
+	var tw := create_tween()
+	tw.tween_interval(1.4)
+	tw.tween_property(panel, "modulate:a", 0.0, 0.35)
+	tw.tween_callback(panel.queue_free)
+
+const BATTLE := "res://scenes/battle.tscn"
+
 func _on_play() -> void:
+	Meta.endless_run = false
 	get_tree().change_scene_to_file(LEVEL_SELECT)
+
+# Endless: seviye seçmeden doğrudan sonsuz run'a gir (ritim sürekli hızlanır).
+func _on_endless() -> void:
+	Meta.endless_run = true
+	get_tree().change_scene_to_file(BATTLE)
 
 func _on_characters() -> void:
 	get_tree().change_scene_to_file(CHARACTERS)

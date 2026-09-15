@@ -8,6 +8,7 @@ extends SceneTree
 
 const TestTurnManager := preload("res://tests/test_turn_manager.gd")
 const TestRunManager := preload("res://tests/test_run_manager.gd")
+const TestRunMap := preload("res://tests/test_run_map.gd")
 const TestMetaProgress := preload("res://tests/test_meta_progress.gd")
 const TestInputEvaluator := preload("res://tests/test_input_evaluator.gd")
 const TestMageForm := preload("res://tests/test_mage_form.gd")
@@ -39,6 +40,8 @@ func _initialize() -> void:
 	TestTurnManager.run(self)
 	print("== Run omurgası testleri ==")
 	TestRunManager.run(self)
+	print("== Run harita testleri ==")
+	TestRunMap.run(self)
 	print("== Meta ilerleme testleri ==")
 	TestMetaProgress.run(self)
 	print("== Ekipman testleri ==")

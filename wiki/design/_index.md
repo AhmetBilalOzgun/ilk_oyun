@@ -21,3 +21,5 @@ Game design, mechanics, systems, UX.
 - [[Düşman Tasarımı]] — silüetten okunan zaaf (approved)
 - [[Juice ve Geri Bildirim]] — akkor mürekkep, yörünge, tepki merdiveni (draft)
 - [[Oturum Yapısı ve Başarısızlık]] — dalga yapısı, rün özü, diriliş (draft)
+- [[Makro Oyun — Yol Haritası]] — build keşfi, 3 katman, fazlı task listesi (active, 2026-09-15)
+- [[Mastery / Battle-Pass]] — oynadıkça dolan barla arketip/eşya açılışı (active, 2026-09-15)

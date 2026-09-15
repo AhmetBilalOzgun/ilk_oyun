@@ -49,8 +49,15 @@ static func run(t) -> void:
 	_test_content_integration(t)
 	_test_orb_board_score(t)
 	_test_relic_choice(t)
+	_test_archetype_choice(t)
+	_test_archetype_cadence(t)
+	_test_archetype_unlock_gate(t)
+	_test_elite_node(t)
 	_test_transformed_signal(t)
 	_test_reroll_and_skip(t)
+	_test_route_branching(t)
+	_test_campaign_map_full(t)
+	_test_endless_flow(t)
 
 # Fizik board skorlaması: puan = Σ(orb_value × çarpan).
 static func _test_orb_board_score(t) -> void:
@@ -73,6 +80,95 @@ static func _test_relic_choice(t) -> void:
 	t.check(rs.relic_set().has(relic.hook), "RelicSet hook taşır (%s)" % relic.hook)
 	for c in ChoiceGenerator._relic_candidates(rs, cat):
 		t.check(c.params["relic"].id != relic.id, "sahip olunan relic tekrar sunulmaz")
+
+# ARCHETYPE seçeneği build katmanını loadout'a bindirir (enhancement); RelicSet
+# kancaları taşır; kimlik-swap DEĞİŞMEZ; sahip olunan arketip tekrar sunulmaz.
+static func _test_archetype_choice(t) -> void:
+	t.section("archetype_choice")
+	var cat := RunContent.catalog()
+	t.check(cat.archetypes_for("ember").size() == 3, "Ember 3 arketip (got %d)" % cat.archetypes_for("ember").size())
+	t.check(cat.archetypes_for("plasma").size() == 0, "Plazma arketipi henüz yok (sonra)")
+	var rs := RunState.new(RunContent.party(), RunContent.start_forms(cat))
+	var a = cat.archetypes_for("ember")[0]   # burn_build
+	ChoiceOption.new(ChoiceOption.Kind.ARCHETYPE, "x",
+		{"char_id": "ember", "archetype": a},
+		ChoiceGenerator.cost_for(ChoiceOption.Kind.ARCHETYPE)).apply(rs)
+	var lo := rs.loadout("ember")
+	t.check(lo.has_archetype(a.id), "arketip loadout'a bindi")
+	t.check(rs.relic_set().has(a.effects[0].hook), "RelicSet arketip kancasını taşır (%s)" % a.effects[0].hook)
+	t.check(lo.current_form.id == "ember", "arketip formu DEĞİŞTİRMEDİ (enhancement)")
+	t.check(lo.form_display_name().begins_with(a.name_prefix), "form adı ön ek aldı (%s)" % lo.form_display_name())
+	# DIŞLAYICI: commit sonrası hiç arketip sunulmaz (diğer 2'si kilit).
+	t.check(ChoiceGenerator._archetype_candidates(rs, cat).is_empty(),
+		"commit sonrası arketip sunulmaz (dışlayıcı seçim)")
+
+# Build cadence: arketip teklifi yalnız build-bölümlerinde; allow_archetypes=false ise
+# CHOICE hiç arketip sunmaz (o run stat-meta grind'i).
+static func _test_archetype_cadence(t) -> void:
+	t.section("archetype_cadence")
+	t.check(not RunContent.is_build_level(0), "i=0 (tutorial) build bölümü değil")
+	t.check(not RunContent.is_build_level(4), "i=4 build bölümü değil")
+	t.check(RunContent.is_build_level(3), "i=3 build bölümü")
+	t.check(RunContent.is_build_level(7), "i=7 build bölümü")
+	t.check(RunContent.is_build_level(11), "i=11 build bölümü")
+	var cat := RunContent.catalog()
+	var rs := RunState.new(RunContent.party(), RunContent.start_forms(cat))
+	rs.allow_archetypes = false
+	t.check(ChoiceGenerator._archetype_candidates(rs, cat).is_empty(), "kapalıyken arketip sunulmaz")
+	rs.allow_archetypes = true
+	t.check(ChoiceGenerator._archetype_candidates(rs, cat).size() == 3, "açıkken 3 arketip sunulur")
+
+# Battle-pass gate: yalnız AÇILAN arketipler CHOICE havuzunda çıkar (unlocked_archetypes).
+static func _test_archetype_unlock_gate(t) -> void:
+	t.section("archetype_unlock_gate")
+	var cat := RunContent.catalog()
+	var rs := RunState.new(RunContent.party(), RunContent.start_forms(cat))
+	t.check(ChoiceGenerator._archetype_candidates(rs, cat).size() == 3, "null (sınır yok): 3 arketip")
+	rs.unlocked_archetypes = ["burn_build"]
+	var cand := ChoiceGenerator._archetype_candidates(rs, cat)
+	t.check(cand.size() == 1, "yalnız açılan sunulur")
+	t.check(cand[0].params["archetype"].id == "burn_build", "açılan = burn_build")
+	rs.unlocked_archetypes = []
+	t.check(ChoiceGenerator._archetype_candidates(rs, cat).is_empty(), "hiç açık yok -> hiç sunulmaz")
+
+# ELITE düğümü: StageDef elite_set boss'tan önce bir ELITE + CHOICE ekler; RunManager
+# onu battle olarak sunar (battle_requested); is_elite doğru; akış boss'a devam eder.
+static func _test_elite_node(t) -> void:
+	t.section("elite_node")
+	var cat := _catalog()
+	var rs := RunState.new(_party(), _start(cat))
+	var elite := [_enemy("elite", 120)]
+	var nodes := StageDef.linear([[_enemy("a", 30)]], [_enemy("boss", 80)], 100, elite)
+	# BATTLE, CHOICE, ELITE, CHOICE, BOSS, REWARD = 6
+	t.check(nodes.size() == 6, "elite_set 6 düğüm üretir (got %d)" % nodes.size())
+	var types: Array = []
+	for n in nodes:
+		types.append(n.type)
+	t.check(RunNode.Type.ELITE in types, "ELITE düğümü eklendi")
+	# RunContent tutorial'da elite YOK, i>=3'te VAR.
+	t.check(not _has_type(RunContent.stage_nodes(0), RunNode.Type.ELITE), "tutorial (i=0) elite içermez")
+	t.check(_has_type(RunContent.stage_nodes(5), RunNode.Type.ELITE), "i=5 elite içerir")
+
+	var rm := RunManager.new(cat, _rng(1))
+	var elite_seen := {"n": 0}
+	rm.node_entered.connect(func(n): if n.is_elite(): elite_seen["n"] += 1)
+	rm.start(nodes, rs)
+	rm.report_battle_result(true)   # BATTLE -> CHOICE
+	rm.skip_choice()                # CHOICE -> ELITE
+	t.check(rm.current_node().is_elite(), "elite düğümü aktif (battle olarak sunulur)")
+	t.check(rm.state == RunManager.State.AWAITING_BATTLE, "ELITE savaş olarak beklenir")
+	t.check(elite_seen["n"] == 1, "ELITE node_entered emit etti")
+	rm.report_battle_result(true)   # ELITE -> CHOICE
+	rm.skip_choice()                # CHOICE -> BOSS
+	t.check(rm.current_node().type == RunNode.Type.BOSS, "elite sonrası boss")
+	rm.report_battle_result(true)   # BOSS -> REWARD -> RUN_WON
+	t.check(rm.state == RunManager.State.RUN_WON, "elite dahil run kazanıldı")
+
+static func _has_type(nodes: Array, type: int) -> bool:
+	for n in nodes:
+		if n.type == type:
+			return true
+	return false
 
 # Bir ACQUIRE_RUNE dönüşüm tetiklerse transformed emit edilir.
 static func _test_transformed_signal(t) -> void:
@@ -230,6 +326,73 @@ static func _test_generator_offers_transform(t) -> void:
 	t.check(has_transform, "en az bir dönüşüm (rün alma) sunulur")
 	var opts2 := ChoiceGenerator.generate(rs, cat, _rng(7))
 	t.check(opts[0].label == opts2[0].label, "aynı seed aynı sonuç")
+
+# Dallanmalı harita: seçim sonrası ROTA state'i; erişilemez düğüm reddedilir; geçerli seçim ilerletir.
+static func _test_route_branching(t) -> void:
+	t.section("route_branching")
+	var cat := RunContent.catalog()
+	var rs := RunState.new(RunContent.party(), RunContent.start_forms(cat))
+	var m := RunContent.campaign_map(5, _rng(4))
+	var rm := RunManager.new(cat, _rng(4))
+	var route_hits := {"n": 0, "opts": []}
+	rm.route_requested.connect(func(_mp, opts): route_hits["n"] += 1; route_hits["opts"] = opts)
+	rm.start(m, rs)
+	t.check(rm.state == RunManager.State.AWAITING_BATTLE, "harita: giriş savaşı")
+	rm.report_battle_result(true)   # -> CHOICE (tek haleften)
+	t.check(rm.state == RunManager.State.AWAITING_CHOICE, "giriş sonrası seçim")
+	rm.skip_choice()                # -> ROTA (orta sütun dallanır)
+	t.check(rm.state == RunManager.State.AWAITING_ROUTE, "seçim sonrası ROTA")
+	t.check(route_hits["n"] == 1 and route_hits["opts"].size() >= 2, "dallanma: >=2 seçenek sunuldu")
+	rm.choose(999999)               # erişilemez
+	t.check(rm.state == RunManager.State.AWAITING_ROUTE, "erişilemez düğüm reddedildi")
+	var pick: int = rm.current_node().next[0]
+	rm.choose(pick)
+	t.check(rm.state != RunManager.State.AWAITING_ROUTE, "geçerli seçim ilerletti")
+	t.check(rm.current_node() == m.nodes[pick], "seçilen odaya girildi")
+
+# Campaign harita uçtan uca: hep kazan, rotada ilk seçeneği al -> RUN_WON + ödül.
+static func _test_campaign_map_full(t) -> void:
+	t.section("route_campaign_full")
+	var cat := RunContent.catalog()
+	var rs := RunState.new(RunContent.party(), RunContent.start_forms(cat))
+	var m := RunContent.campaign_map(6, _rng(8))
+	var rm := RunManager.new(cat, _rng(8))
+	rm.start(m, rs)
+	var guard := 0
+	while rm.state != RunManager.State.RUN_WON and rm.state != RunManager.State.RUN_LOST and guard < 300:
+		guard += 1
+		match rm.state:
+			RunManager.State.AWAITING_BATTLE:
+				rm.report_battle_result(true)
+			RunManager.State.AWAITING_CHOICE:
+				rm.skip_choice()
+			RunManager.State.AWAITING_ROUTE:
+				rm.choose(rm.current_node().next[0])
+	t.check(rm.state == RunManager.State.RUN_WON, "harita: tam run kazanıldı")
+	t.check(rs.gold == RunContent.reward_gold(6), "harita: reward_gold(6) yazıldı")
+
+# Endless: boss/reward yok -> RUN_WON'a ulaşmaz; harita extend ile büyür; akış sürer.
+static func _test_endless_flow(t) -> void:
+	t.section("route_endless")
+	var cat := RunContent.catalog()
+	var rs := RunState.new(RunContent.party(), RunContent.start_forms(cat))
+	rs.endless = true
+	var m := RunContent.endless_map(_rng(2))
+	var initial := m.nodes.size()
+	var rm := RunManager.new(cat, _rng(2))
+	rm.start(m, rs)
+	var guard := 0
+	while rm.state != RunManager.State.RUN_WON and rm.state != RunManager.State.RUN_LOST and guard < 50:
+		guard += 1
+		match rm.state:
+			RunManager.State.AWAITING_BATTLE:
+				rm.report_battle_result(true)
+			RunManager.State.AWAITING_CHOICE:
+				rm.skip_choice()
+			RunManager.State.AWAITING_ROUTE:
+				rm.choose(rm.current_node().next[0])
+	t.check(rm.state != RunManager.State.RUN_WON, "endless: RUN_WON'a ulaşmaz (boss yok)")
+	t.check(m.nodes.size() > initial, "endless: harita extend ile büyüdü (%d -> %d)" % [initial, m.nodes.size()])
 
 static func _has_skill(skills: Array, id: String) -> bool:
 	for s in skills:

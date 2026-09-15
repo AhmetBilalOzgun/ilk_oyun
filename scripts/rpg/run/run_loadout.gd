@@ -15,6 +15,7 @@ var current_form: MageForm
 var current_hp: int          # savaşlar arası taşınan can
 var bonus_max_hp: int = 0    # run-içi +max HP boost'ları
 var charge: int = 0          # savaşlar (wave) arası taşınan şarj — geçişte %X düşer
+var archetypes: Array = []   # Array[Archetype] — bu büyücüye binen build katmanları
 
 func _init(p_character: Character, p_form: MageForm = null) -> void:
 	character = p_character
@@ -59,3 +60,33 @@ func acquire_rune(rune_id: String, catalog: SkillCatalog) -> MageForm:
 func transform_to(form: MageForm) -> void:
 	if form != null:
 		current_form = form
+
+# --- Build arketipi (enhancement katmanı; kimlik-swap'tan bağımsız) ---
+
+func add_archetype(a) -> void:
+	if a != null:
+		archetypes.append(a)
+
+func has_archetype(id: String) -> bool:
+	for a in archetypes:
+		if a.id == id:
+			return true
+	return false
+
+# Binen tüm arketiplerin kanca taşıyıcıları — RunState.relic_set() bunları RelicSet'e
+# ekler, motor mevcut hook mekanizmasıyla okur.
+func archetype_effects() -> Array:
+	var out: Array = []
+	for a in archetypes:
+		out.append_array(a.effects)
+	return out
+
+# Güncel formun UI adı, binen arketiplerin ön ekleriyle ("Alev Kor Büyücü").
+func form_display_name() -> String:
+	if current_form == null:
+		return ""
+	var out := current_form.display_name
+	for a in archetypes:
+		if a.name_prefix != "":
+			out = "%s %s" % [a.name_prefix, out]
+	return out

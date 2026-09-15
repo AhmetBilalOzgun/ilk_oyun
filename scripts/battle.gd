@@ -51,6 +51,9 @@ var _board: OrbBoard = null
 var _orbs := 0                    # board'dan kazanılan çarpılmış orb (kart bedeli)
 var _pending_options: Array = []
 
+# ROUTE: StS harita ekranı katmanı (çizgiler + oda butonları). Seçim yapılınca temizlenir.
+var _map_layer: Node2D = null
+
 # Büyü öncesi RİTİM KOMBO minigame'i (aktif). Beceri seçilince açılır; her tile bir
 # "vuruş" (per-tile fireball + hasar sayısı), son tile FINISHER. Bittiğinde kombo skoru
 # tek bir float çarpana indirgenip motora submit edilir. Eski kaydırma/basma jesti KALDIRILDI.
@@ -102,7 +105,10 @@ const REROLL_COST := 15         # CHOICE kart reroll'unun draft puanı bedeli
 const HEAL_FIXED_COST := 10     # CHOICE'ta sol "CAN AL" butonu orb bedeli
 const HEAL_FIXED_AMOUNT := 25   # sol "CAN AL" butonu tüm partiyi bu kadar iyileştirir
 const WAVE_CHARGE_DECAY := 0.20 # savaşlar (wave) arası taşınan şarjın kaybı (%20)
+const ELITE_ORB_MULT := 2       # ELITE savaş orb ödülü çarpanı (risk/reward)
 const RHYTHM_SPEEDUP_PER_WAVE := 0.12 # her tur (wave) geçtikçe ritim hızına eklenen çarpan
+const ENDLESS_RHYTHM_RAMP := 0.06     # endless: her temizlenen oda ritim hız tabanına eklenir
+const ENDLESS_GOLD_BASE := 10         # endless: oda başı temel altın (derinlikle artar)
 
 const EFFECT_COLOR := {
 	"Burn": Color(0.95, 0.45, 0.2, 1),
@@ -153,9 +159,18 @@ func _ready() -> void:
 		c.max_hp += Meta.hp_bonus(c.id) + Meta.equipped_hp_bonus()
 		c.speed += Meta.equipped_speed_bonus()
 	run_state = RunState.new(party, RunContent.start_forms(catalog))
-	rm = RunManager.new(catalog)
+	run_state.endless = Meta.endless_run
+	# Build cadence: arketip teklifi yalnız build-bölümlerinde; endless'ta hep açık.
+	run_state.allow_archetypes = true if run_state.endless else RunContent.is_build_level(Meta.selected_level)
+	# Battle-pass: yalnız mastery ile AÇILMIŞ arketipler CHOICE havuzunda çıkabilir.
+	run_state.unlocked_archetypes = Meta.unlocked_archetypes.duplicate()
+	var map_rng := RandomNumberGenerator.new()
+	map_rng.randomize()
+	rm = RunManager.new(catalog, map_rng)
 	rm.battle_requested.connect(_on_battle_requested)
 	rm.choice_requested.connect(_on_choice_requested)
+	rm.route_requested.connect(_on_route_requested)
+	rm.room_resolved.connect(_on_room_resolved)
 	rm.transformed.connect(_on_transformed)
 	rm.run_ended.connect(_on_run_ended)
 
@@ -193,7 +208,9 @@ func _ready() -> void:
 	add_child(overlay)
 
 	_last_usec = Time.get_ticks_usec()
-	rm.start(RunContent.stage_nodes(Meta.selected_level), run_state)
+	var run_map: RunMap = RunContent.endless_map(map_rng) if run_state.endless \
+		else RunContent.campaign_map(Meta.selected_level, map_rng)
+	rm.start(run_map, run_state)
 
 func _style_button(btn: Button, accent_color: Color = Color(0.9, 0.75, 0.3), height: float = 78.0, width: float = 900.0, font_size: int = 30) -> void:
 	btn.custom_minimum_size = Vector2(width, height)
@@ -321,9 +338,17 @@ func _show_cards() -> void:
 		var accent := _choice_color(opt) if afford else Color(0.4, 0.4, 0.45)
 		_style_button(card, accent, 380.0, 196.0, 26)
 		card.pressed.connect(_on_choice_chosen.bind(i))
-		row.add_child(card)
-		# Dönüşüm kartı: mor parıltı ile dikkat çek.
-		if afford and opt.kind == ChoiceOption.Kind.ACQUIRE_RUNE:
+		# Build arketip kartı: üstünde "ARCHETYPE" rozet kutusu — belirgin dursun.
+		if opt.kind == ChoiceOption.Kind.ARCHETYPE:
+			var col := VBoxContainer.new()
+			col.add_theme_constant_override("separation", 6)
+			col.add_child(_archetype_badge(accent))
+			col.add_child(card)
+			row.add_child(col)
+		else:
+			row.add_child(card)
+		# Dönüşüm + build arketip kartı: parıltı ile dikkat çek (öne çıkan kararlar).
+		if afford and (opt.kind == ChoiceOption.Kind.ACQUIRE_RUNE or opt.kind == ChoiceOption.Kind.ARCHETYPE):
 			_pulse_button(card)
 
 	# SAĞ: PAS — şekil (»») + etiket.
@@ -345,10 +370,31 @@ func _show_cards() -> void:
 func _choice_color(opt: ChoiceOption) -> Color:
 	match opt.kind:
 		ChoiceOption.Kind.ACQUIRE_RUNE: return Color(0.7, 0.4, 1.0)
+		ChoiceOption.Kind.ARCHETYPE: return Color(1.0, 0.35, 0.22)
 		ChoiceOption.Kind.RELIC: return Color(0.95, 0.75, 0.3)
 		ChoiceOption.Kind.HEAL: return Color(0.4, 0.85, 0.5)
 		ChoiceOption.Kind.MAX_HP: return Color(1.0, 0.55, 0.3)
 	return Color(0.35, 0.75, 1.0)
+
+# Arketip kartının üstündeki "ARCHETYPE" rozet kutusu (kart genişliğine yayılır).
+func _archetype_badge(accent: Color) -> Control:
+	var pc := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = accent
+	sb.set_corner_radius_all(10)
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	pc.add_theme_stylebox_override("panel", sb)
+	var l := Label.new()
+	l.text = "◈ ARCHETYPE ◈"
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_override("font", PIXEL_FONT)
+	l.add_theme_font_size_override("font_size", 24)
+	l.add_theme_color_override("font_color", Color(0.1, 0.06, 0.05))
+	pc.add_child(l)
+	return pc
 
 # Mor parıltı nabzı (dönüşüm kartı öne çıksın).
 func _pulse_button(btn: Control) -> void:
@@ -382,6 +428,9 @@ func _on_heal_fixed() -> void:
 func _choice_icon(opt: ChoiceOption) -> String:
 	match opt.kind:
 		ChoiceOption.Kind.ACQUIRE_RUNE: return "🔮"
+		ChoiceOption.Kind.ARCHETYPE:
+			var a = opt.params.get("archetype", null)
+			return a.icon if a != null else "🔥"
 		ChoiceOption.Kind.HEAL: return "❤"
 		ChoiceOption.Kind.MAX_HP: return "➕"
 		ChoiceOption.Kind.RELIC: return "🎁"
@@ -425,6 +474,15 @@ func _player_frames(c: Combatant) -> SpriteFrames:
 		key = lo.current_form.sprite_key
 	return PLAYER_FRAMES[key]
 
+# Commit edilen build arketipinin sprite rengi (dışlayıcı: en çok bir arketip). Yoksa
+# WHITE (nötr). _process her karede bunu büyücü modulate'ine uygular.
+func _party_tint(c: Combatant) -> Color:
+	var lo := run_state.loadout(c.source.id) if run_state != null else null
+	if lo != null:
+		for a in lo.archetypes:
+			return a.tint
+	return Color.WHITE
+
 # Ekran-ortası geçici yazı (birkaç saniye). _process söndürür.
 func _flash(msg: String, col: Color, secs := 2.2) -> void:
 	_flash_label.text = msg
@@ -436,16 +494,63 @@ func _on_run_ended(won: bool) -> void:
 	tm = null
 	_clear_menu()
 	_clear_bodies()
+	_clear_map()
 	var lvl: int = Meta.selected_level
-	if won:
+	var cry := 0
+	if run_state.endless:
+		# Endless: kazanç ölümde bile BANKA edilir (fail-soft — ilerleme boşa gitmez).
+		Meta.add_gold(run_state.gold)
+		if run_state.depth > Meta.endless_best_depth:
+			Meta.endless_best_depth = run_state.depth
+			Meta.save_game()
+	elif won:
 		# Ödülü Meta'ya yaz + seviyeyi aç (sonraki kilidi açılır).
-		var cry: int = RunContent.reward_crystal(lvl)
+		cry = RunContent.reward_crystal(lvl)
 		Meta.add_gold(run_state.gold)
 		Meta.add_crystal(cry)
 		Meta.clear_level(lvl)
-		status_label.text = "BÖLÜM TAMAMLANDI 🏆  +%d💰  +%d💎" % [run_state.gold, cry]
+	# RUN-END SUMMARY: run kapanış katmanı (savaş sonu değil). Kurulan build + ödül.
+	_show_run_summary(won, cry)
+
+# Run sonu özet paneli: başlık + kurulan build (form + arketip + relik) + ödül + eve.
+func _show_run_summary(won: bool, cry: int) -> void:
+	if run_state.endless:
+		status_label.text = "♾ %d KAT İLERLEDİN" % run_state.depth
+		status_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
 	else:
-		status_label.text = "PARTİ YENİLDİ — run bitti (%s)" % _progress_text()
+		status_label.text = "🏆 RUN TAMAMLANDI" if won else "💀 RUN BİTTİ"
+		status_label.add_theme_color_override("font_color",
+			Color(1.0, 0.85, 0.35) if won else Color(1.0, 0.5, 0.5))
+
+	skill_menu.position = Vector2(90, 620)
+	skill_menu.add_theme_constant_override("separation", 16)
+
+	# BUILD başlığı + her büyücünün kimliği ("Alev Kor Büyücü") + binen arketipler.
+	_summary_label("⚔  BUILD", 34, Color(0.7, 0.85, 1.0))
+	for lo in run_state.ordered_loadouts():
+		_summary_label("🔥 %s" % lo.form_display_name(), 30, Color(1.0, 0.6, 0.35))
+		var arch: Array = []
+		for a in lo.archetypes:
+			arch.append(a.display_name)
+		if not arch.is_empty():
+			_summary_label("   %s" % ", ".join(arch), 24, Color(0.9, 0.75, 0.5))
+
+	# Toplanan relikler (run boyu kural kartları).
+	var relic_names: Array = []
+	for r in run_state.relics:
+		relic_names.append(r.display_name)
+	if not relic_names.is_empty():
+		_summary_label("🎁  %s" % ", ".join(relic_names), 24, Color(0.95, 0.8, 0.4))
+
+	# Kazanılan değer.
+	if run_state.endless:
+		_summary_label("KAZANILAN:  +%d💰   (en iyi: %d kat)" % [run_state.gold, Meta.endless_best_depth],
+			30, Color(0.5, 0.9, 0.6))
+	elif won:
+		_summary_label("KAZANILAN:  +%d💰   +%d💎" % [run_state.gold, cry], 30, Color(0.5, 0.9, 0.6))
+	else:
+		_summary_label("Buraya kadar: %s" % _progress_text(), 26, Color(0.8, 0.8, 0.85))
+
 	# Ana ekrana dönüş.
 	var home_btn := Button.new()
 	home_btn.text = "🏠 ANA EKRAN"
@@ -453,8 +558,156 @@ func _on_run_ended(won: bool) -> void:
 	home_btn.pressed.connect(func(): get_tree().change_scene_to_file(HOME))
 	skill_menu.add_child(home_btn)
 
+# Özet paneline tek satır ekle (pixel font + kontur).
+func _summary_label(text: String, size: int, col: Color) -> void:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_override("font", PIXEL_FONT)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", col)
+	l.add_theme_constant_override("outline_size", 5)
+	l.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.08, 1.0))
+	skill_menu.add_child(l)
+
 func _progress_text() -> String:
+	if run_state.endless:
+		return "kat %d" % run_state.depth
 	return "düğüm %d/%d" % [run_state.node_index + 1, rm.nodes.size()]
+
+# =========================================================================
+#  ROUTE — StS harita ekranı (dallanmalı ilerleme)
+# =========================================================================
+
+const MAP_TOP := 360.0            # harita üst kenarı (en ileri sütun)
+const MAP_BOTTOM := 1560.0        # harita alt kenarı (mevcut/geçilen sütun)
+const MAP_X0 := 140.0
+const MAP_X1 := 940.0
+const MAP_WINDOW := 5             # aynı anda gösterilen sütun sayısı (endless pencere)
+const MAP_NODE := 118.0           # oda butonu kenarı
+
+# Bir savaş/oda çözülünce RunManager sıradaki odaları sunar. Haritayı çiz, rota seçtir.
+func _on_route_requested(run_map, options: Array) -> void:
+	tm = null
+	_clear_bodies()
+	_clear_menu()
+	_clear_map()
+	status_label.text = "🗺 ROTA SEÇ — %s" % _progress_text()
+	status_label.add_theme_color_override("font_color", Color(0.75, 0.9, 1.0))
+	if run_map == null:
+		return   # lineer akış (route beklenmez) — güvenlik
+	_map_layer = Node2D.new()
+	_map_layer.z_index = 20
+	add_child(_map_layer)
+
+	# Gösterim penceresi: seçilecek sütunun bir öncesinden birkaç ileri.
+	var reach: Array = rm.current_node().next
+	var target_col := int(options[0].col) if not options.is_empty() else 0
+	var start_col := maxi(0, target_col - 1)
+	var end_col := mini(run_map.columns.size() - 1, start_col + MAP_WINDOW - 1)
+	var shown := end_col - start_col + 1
+	var span := MAP_BOTTOM - MAP_TOP
+
+	# Her gösterilen oda için ekran konumu (indeks -> Vector2). Önce hesapla (çizgiler için).
+	var pos: Dictionary = {}
+	for ci in range(start_col, end_col + 1):
+		var col_rooms: Array = run_map.columns[ci]
+		var rel := ci - start_col
+		var y := MAP_BOTTOM - (span * float(rel) / float(maxi(1, shown - 1)))
+		var w := col_rooms.size()
+		for r in range(w):
+			var x := MAP_X0 + (MAP_X1 - MAP_X0) * (float(r) + 0.5) / float(w)
+			pos[col_rooms[r]] = Vector2(x, y)
+
+	# Bağlantı çizgileri (oda -> sonraki odalar), butonların ALTINDA.
+	for idx in pos.keys():
+		for nxt in _room_next_rooms(run_map, idx):
+			if pos.has(nxt):
+				var line := Line2D.new()
+				line.add_point(pos[idx])
+				line.add_point(pos[nxt])
+				line.width = 5.0
+				line.default_color = Color(0.4, 0.5, 0.7, 0.5)
+				line.z_index = 0
+				_map_layer.add_child(line)
+
+	# Oda butonları.
+	for idx in pos.keys():
+		var node: RunNode = run_map.nodes[idx]
+		var reachable: bool = idx in reach
+		var btn := Button.new()
+		btn.text = "%s\n%s" % [_room_icon(node), _room_short(node)]
+		btn.position = pos[idx] - Vector2(MAP_NODE * 0.5, MAP_NODE * 0.5)
+		var accent := _room_color(node) if reachable else Color(0.35, 0.35, 0.42)
+		_style_button(btn, accent, MAP_NODE, MAP_NODE, 22)
+		btn.disabled = not reachable
+		if reachable:
+			btn.pressed.connect(_on_route_chosen.bind(idx))
+			_pulse_button(btn)
+		else:
+			btn.modulate = Color(1, 1, 1, 0.55)
+		_map_layer.add_child(btn)
+
+func _on_route_chosen(index: int) -> void:
+	_clear_map()
+	rm.choose(index)
+
+func _clear_map() -> void:
+	if _map_layer != null:
+		_map_layer.queue_free()
+		_map_layer = null
+
+# Bir odanın harita komşusu ODALARI (CHOICE ara düğümünü atlar).
+func _room_next_rooms(run_map, idx: int) -> Array:
+	var out: Array = []
+	for ni in run_map.nodes[idx].next:
+		var nn: RunNode = run_map.nodes[ni]
+		if nn.type == RunNode.Type.CHOICE:
+			for ri in nn.next:
+				out.append(ri)
+		elif nn.is_room():
+			out.append(ni)
+	return out
+
+func _room_icon(node: RunNode) -> String:
+	match node.type:
+		RunNode.Type.ELITE: return "☠"
+		RunNode.Type.BOSS: return "👑"
+		RunNode.Type.HEAL: return "❤"
+		RunNode.Type.TREASURE: return "🎁"
+	return "⚔"
+
+func _room_short(node: RunNode) -> String:
+	match node.type:
+		RunNode.Type.ELITE: return "ELİT"
+		RunNode.Type.BOSS: return "BOSS"
+		RunNode.Type.HEAL: return "DİNLEN"
+		RunNode.Type.TREASURE: return "HAZİNE"
+	return "SAVAŞ"
+
+func _room_color(node: RunNode) -> Color:
+	match node.type:
+		RunNode.Type.ELITE: return Color(1.0, 0.55, 0.3)
+		RunNode.Type.BOSS: return Color(0.9, 0.3, 0.35)
+		RunNode.Type.HEAL: return Color(0.4, 0.85, 0.5)
+		RunNode.Type.TREASURE: return Color(0.95, 0.8, 0.3)
+	return Color(0.6, 0.75, 1.0)
+
+# Savaşsız oda (HEAL/TREASURE) çözüldü — kısa bildirim + endless derinlik ilerlet.
+func _on_room_resolved(node: RunNode) -> void:
+	if node.type == RunNode.Type.HEAL:
+		_flash("❤ DİNLENME — parti iyileşti", Color(0.4, 0.85, 0.5), 1.6)
+	elif node.type == RunNode.Type.TREASURE:
+		var relic = node.data.get("relic", null)
+		var rn: String = relic.display_name if relic != null else "hazine"
+		_flash("🎁 HAZİNE — %s + orb" % rn, Color(0.95, 0.8, 0.3), 1.8)
+	_advance_depth()
+
+# Endless: bir oda temizlendi -> derinlik + altın biriktir (ölümde banka edilir).
+func _advance_depth() -> void:
+	if not run_state.endless:
+		return
+	run_state.depth += 1
+	run_state.gold += ENDLESS_GOLD_BASE + run_state.depth * 2
 
 # =========================================================================
 #  SAVAŞ kurulumu (run-içi loadout -> geçici Character)
@@ -514,7 +767,15 @@ func _start_battle(enemies: Array) -> void:
 				cmb.charge = clampi(lo.charge, 0, cmb.charge_max)
 
 	_build_bodies()
-	status_label.text = "SAVAŞ — %s" % _progress_text()
+	# ELITE savaş görsel olarak ayrışır (risk/reward uyarısı).
+	var node := rm.current_node() if rm != null else null
+	if node != null and node.is_elite():
+		status_label.text = "☠ ELİT SAVAŞ — %s" % _progress_text()
+		status_label.add_theme_color_override("font_color", Color(1.0, 0.55, 0.3))
+		_flash("☠ ELİT — çift orb!", Color(1.0, 0.55, 0.3), 1.8)
+	else:
+		status_label.text = "SAVAŞ — %s" % _progress_text()
+		status_label.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
 	# Bir önceki CHOICE'ta rün dönüşümü olduysa: ilk turun başında reveal animasyonu.
 	_reveal_transform()
 
@@ -629,7 +890,12 @@ func _on_input_requested(sequence: InputSequence) -> void:
 	var wave_scale := 1.0 + float(waves_passed) * RHYTHM_SPEEDUP_PER_WAVE
 	# Adaptive: oyuncunun gerçek oynayışına göre (kalıcı profil + oturum) hızı ölçekle.
 	# 20 de 60 yaş da zevk alsın; kötü gün/el değişimi oturum skill'iyle yakalanır.
-	var speed_scale := wave_scale * Meta.rhythm_speed_scale()
+	var adaptive := Meta.rhythm_speed_scale()
+	# Endless OVERRIDE: ritim derinlikle SÜREKLİ hızlanır; adaptive yavaşlatma tabanı ezemez
+	# (yalnız daha da hızlandırabilir). Campaign'de adaptive iki yönlü kalır.
+	if run_state.endless:
+		adaptive = maxf(adaptive, 1.0 + float(run_state.depth) * ENDLESS_RHYTHM_RAMP)
+	var speed_scale := wave_scale * adaptive
 	_rhythm.setup(_combo_length(), Rect2(90, ry_y, 900, 320), speed_scale)
 
 # Tutturulan her tile bir "vuruş": caster'dan hedefe escalating fireball + hasar sayısı.
@@ -983,12 +1249,27 @@ func _on_battle_ended(winner_side: int) -> void:
 func _finalize_battle() -> void:
 	var won := _pending_won
 	if won:
-		# Yenilen düşman başına 1 orb (CHOICE'ta board'a dökülür).
+		# Yenilen düşman başına 1 orb (CHOICE'ta board'a dökülür). ELITE savaş orb'u
+		# katlar (risk/reward: daha güçlü düşman -> daha yüksek ödül).
 		var foes := 0
 		for cmb in tm.combatants:
 			if cmb.side == Combatant.Side.ENEMY:
 				foes += 1
-		run_state.orbs += foes
+		var node := rm.current_node() if rm != null else null
+		var mult := ELITE_ORB_MULT if (node != null and node.is_elite()) else 1
+		run_state.orbs += foes * mult
+		# Battle-pass: her savaş zaferi mastery kazandırır (elite/boss ekstra). Ödül
+		# ANA EKRANDA elle toplanır (Meta.claim_next); burada sadece "hazır" toast'u.
+		var gain := Meta.MASTERY_PER_WIN
+		if node != null and node.is_elite():
+			gain += Meta.MASTERY_ELITE_BONUS
+		elif node != null and node.type == RunNode.Type.BOSS:
+			gain += Meta.MASTERY_BOSS_BONUS
+		var before_claimable := Meta.claimable_count()
+		Meta.add_mastery(gain)
+		if Meta.claimable_count() > before_claimable:
+			_flash("🎁 Yeni mastery ödülü hazır — ANA EKRAN'da TOPLA!", Color(1.0, 0.85, 0.35), 2.4)
+		_advance_depth()   # endless: temizlenen savaş odası derinlik + altın biriktirir
 		_save_party_hp()
 	# report_battle_result sıradaki düğümü tetikler (battle/choice/run_ended).
 	rm.report_battle_result(won)
@@ -1157,19 +1438,22 @@ func _update_bodies() -> void:
 			var en_col := Color(1.0, 0.82, 0.2) if c.is_charged() else Color(0.35, 0.7, 1.0)
 			_set_bar(b["en_fill"], cr, en_col)
 			var spr: AnimatedSprite2D = b["sprite"]
+			# Build arketip rengi: commit edilen arketip büyücüyü boyar (görsel kimlik);
+			# tüm animasyonlara (idle/cast/hurt) biner. Yoksa WHITE (nötr).
+			var tint := _party_tint(c)
 			if not c.is_alive():
 				if not b["dead_played"]:
 					spr.play("death")
 					b["dead_played"] = true
 				spr.modulate = Color(0.55, 0.55, 0.6, 1)
 			elif tm != null and c == tm.active:
-				spr.modulate = Color(1.3, 1.3, 1.15, 1)
+				spr.modulate = Color(1.3, 1.3, 1.15, 1) * tint   # cast: arketip renginde parlar
 			elif c.stunned:
 				spr.modulate = Color(0.6, 0.75, 1.1, 1)
 			elif c.pending_dot > 0:
 				spr.modulate = Color(1.2, 0.7, 0.5, 1)
 			else:
-				spr.modulate = Color.WHITE
+				spr.modulate = tint
 		else:
 			var espr: AnimatedSprite2D = b["sprite"]
 			if not c.is_alive():

@@ -15,24 +15,33 @@ const COST := {
 	ChoiceOption.Kind.HEAL: 10,
 	ChoiceOption.Kind.MAX_HP: 12,
 	ChoiceOption.Kind.RELIC: 30,
+	ChoiceOption.Kind.ARCHETYPE: 24,   # build katmanı — dönüşümle relic arası
 }
 
 static func cost_for(kind: int) -> int:
 	return COST.get(kind, 15)
 
 static func generate(run_state: RunState, catalog: SkillCatalog, rng: RandomNumberGenerator, count: int = DEFAULT_COUNT) -> Array:
-	# Havuz: uygun dönüşümler + henüz sahip olunmayan relic'ler.
-	var pool: Array = _transform_candidates(run_state, catalog)
-	pool.append_array(_relic_candidates(run_state, catalog))
-	_shuffle(pool, rng)
+	# Dönüşüm (kimlik-swap) ana karar anıdır; build havuzu (arketip + relic) onu
+	# kalabalıkla ezmesin diye AYRI tutulur.
+	var transforms: Array = _transform_candidates(run_state, catalog)
+	var builds: Array = _archetype_candidates(run_state, catalog)
+	builds.append_array(_relic_candidates(run_state, catalog))
+	_shuffle(transforms, rng)
+	_shuffle(builds, rng)
 
 	var options: Array = []
-	# Yardımcı seçenek için bir slot ayır (en az bir kart havuzdan gelsin).
-	var pool_slots: int = max(count - 1, 0) if pool.size() >= count else pool.size()
-	for i in range(min(pool_slots, pool.size())):
-		options.append(pool[i])
+	# Uygun bir dönüşüm varsa bir slot GARANTİ edilir.
+	if transforms.size() > 0 and count >= 2:
+		options.append(transforms[0])
 
-	# Kalan slotları yardımcılarla doldur.
+	# Yardımcı için son slotu ayır; gerisini build havuzu doldurur (arketip/relic).
+	var bi := 0
+	while options.size() < count - 1 and bi < builds.size():
+		options.append(builds[bi])
+		bi += 1
+
+	# Kalanları yardımcı doldurur (en az bir yardımcı).
 	while options.size() < count:
 		options.append(_utility(run_state, rng))
 
@@ -70,6 +79,30 @@ static func _transform_candidates(run_state: RunState, catalog: SkillCatalog) ->
 			out.append(ChoiceOption.new(ChoiceOption.Kind.ACQUIRE_RUNE, label,
 				{"char_id": cid, "rune_id": rune_id, "form": to_form},
 				cost_for(ChoiceOption.Kind.ACQUIRE_RUNE)))
+	return out
+
+# Her büyücü × güncel formuna uygun build arketipleri -> ARCHETYPE adayları.
+# DIŞLAYICI: bir büyücü zaten bir arketibe commit ettiyse (archetypes boş DEĞİL) o
+# büyücüye HİÇ arketip sunulmaz — "Burn VEYA İnfaz VEYA Patlama", diğerleri kilit.
+# Cadence: build-bölümü değilse (allow_archetypes=false) hiç sunulmaz — stat-meta grind
+# (içerik maliyeti; bkz [[Makro Oyun — Yol Haritası]] §6).
+static func _archetype_candidates(run_state: RunState, catalog: SkillCatalog) -> Array:
+	var out: Array = []
+	if not run_state.allow_archetypes:
+		return out
+	for cid in run_state.party_order:
+		var lo: RunLoadout = run_state.loadouts[cid]
+		if lo.current_form == null:
+			continue
+		if not lo.archetypes.is_empty():   # commit edilmiş -> kilit (dışlayıcı seçim)
+			continue
+		for a in catalog.archetypes_for(lo.current_form.id):
+			# Battle-pass: yalnız AÇILAN arketipler havuzda çıkabilir (null => sınır yok).
+			if run_state.unlocked_archetypes != null and not (a.id in run_state.unlocked_archetypes):
+				continue
+			out.append(ChoiceOption.new(ChoiceOption.Kind.ARCHETYPE,
+				"%s — %s" % [a.display_name, a.description],
+				{"char_id": cid, "archetype": a}, cost_for(ChoiceOption.Kind.ARCHETYPE)))
 	return out
 
 static func _utility(run_state: RunState, rng: RandomNumberGenerator) -> ChoiceOption:

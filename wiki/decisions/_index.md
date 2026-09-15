@@ -20,6 +20,7 @@ Key design, technical, and project decisions with rationale and date.
 | [[Loadout Kısıtı]] — savaşa 4 rün | 2026-09-07 | active |
 | [[Sessiz Başarısızlık Yok]] — en yakın rüne yuvarla | 2026-09-07 | active |
 | [[Zaaf Bonustur, Kapı Değil]] — yanlış rün %40 hasar | 2026-09-07 | active |
+| [[Build Arketipi — Enhancement, Replacement Değil]] — makro build keşfi, B yolu | 2026-09-15 | active |
 
 ## Pending / Open
 

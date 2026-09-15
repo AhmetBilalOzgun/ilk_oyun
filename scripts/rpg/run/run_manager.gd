@@ -1,43 +1,57 @@
 extends RefCounted
 class_name RunManager
 
-# Run (bölüm) omurgası. Düğüm listesini sırayla gezer; savaşı KENDİ SÜRMEZ
-# (TurnManager gibi host-callback'li): BATTLE/BOSS'ta düşman setini dışarı verir,
-# host savaşı TurnManager ile sürer ve sonucu report_battle_result(won) ile bildirir.
-# CHOICE'ta seçenekleri üretir, host apply_choice(i) çağırır. REWARD terminal:
-# parayı RunState'e yazar, RUN_WON. Herhangi bir savaş kaybı -> RUN_LOST.
+# Run (bölüm) omurgası. Düğüm GRAFINI (DAG) gezer; savaşı KENDİ SÜRMEZ (host-callback'li):
+# BATTLE/ELITE/BOSS'ta düşman setini dışarı verir, host savaşı TurnManager ile sürer ve
+# sonucu report_battle_result(won) ile bildirir. CHOICE'ta seçenekleri üretir. HEAL/TREASURE
+# odaları anında çözülür. REWARD terminal.
 #
-# Saf/headless: Node/Engine/zaman bilmez. Desen: [BATTLE,CHOICE]×N -> BOSS -> REWARD
-# (bkz StageDef). Seçenek üretimi deterministik (RunManager'ın rng'si).
+# İLERLEME = graf kenarları (RunNode.next). Bir düğüm çözülünce sonrakiler bakılır:
+#   0 sonraki  -> run biter (terminal) VEYA endless ise harita uzatılır (extend).
+#   1 sonraki  -> otomatik ilerle (lineer akış — mevcut testler böyle çalışır).
+#   >1 sonraki -> ROUTE seçimi (StS harita): route_requested emit, host choose(i) çağırır.
+#
+# Saf/headless: Node/Engine/zaman bilmez. Kaynak lineer Array (StageDef.linear) VEYA
+# dallanmalı RunMap olabilir; ikisi de RunNode.next kenarlarını kullanır.
 
-enum State { IDLE, AWAITING_BATTLE, AWAITING_CHOICE, RUN_WON, RUN_LOST }
+enum State { IDLE, AWAITING_BATTLE, AWAITING_CHOICE, AWAITING_ROUTE, RUN_WON, RUN_LOST }
 
-signal node_entered(node)          # RunNode
-signal battle_requested(enemies)   # Array[Enemy] — host savaşı kursun
-signal choice_requested(options)   # Array[ChoiceOption]
-signal choice_applied(option)      # ChoiceOption
-signal transformed(form)           # MageForm — bir seçim büyücüyü dönüştürdü (dopamine anı)
-signal run_ended(won)              # bool
+signal node_entered(node)              # RunNode
+signal battle_requested(enemies)       # Array[Enemy] — host savaşı kursun
+signal choice_requested(options)       # Array[ChoiceOption]
+signal choice_applied(option)          # ChoiceOption
+signal route_requested(run_map, options)  # RunMap, Array[RunNode] — erişilebilir sonraki odalar
+signal room_resolved(node)             # RunNode — HEAL/TREASURE gibi savaşsız oda çözüldü
+signal transformed(form)               # MageForm — bir seçim büyücüyü dönüştürdü
+signal run_ended(won)                  # bool
 
 var catalog: SkillCatalog
 var rng: RandomNumberGenerator
 
 var state: int = State.IDLE
-var nodes: Array = []
+var nodes: Array = []          # düz RunNode listesi (indeksler = next kenarları)
+var run_map: RunMap = null     # dallanmalı kaynak (endless extend için); lineer'de null
 var run_state: RunState = null
 var current_choices: Array = []
+var route_options: Array = []  # AWAITING_ROUTE'ta erişilebilir düğümler (choose doğrular)
 
 func _init(p_catalog: SkillCatalog = null, p_rng: RandomNumberGenerator = null) -> void:
 	catalog = p_catalog if p_catalog != null else SkillCatalog.new()
 	rng = p_rng if p_rng != null else RandomNumberGenerator.new()
 
-func start(p_nodes: Array, p_run_state: RunState) -> void:
-	nodes = p_nodes
+# source: RunMap (dallanmalı) VEYA Array[RunNode] (lineer, StageDef.linear).
+func start(source, p_run_state: RunState) -> void:
+	if source is RunMap:
+		run_map = source
+		nodes = run_map.nodes
+	else:
+		run_map = null
+		nodes = source
 	run_state = p_run_state
 	_enter(0)
 
 func current_node() -> RunNode:
-	if run_state == null or run_state.node_index >= nodes.size():
+	if run_state == null or run_state.node_index < 0 or run_state.node_index >= nodes.size():
 		return null
 	return nodes[run_state.node_index]
 
@@ -56,17 +70,17 @@ func report_battle_result(won: bool) -> void:
 		state = State.RUN_LOST
 		run_ended.emit(false)
 		return
+	# Boss dahil her savaş sonrası CHOICE (orb board + kart) — graf CHOICE düğümüyle gelir.
 	_advance()
 
-# Kartları yeniden üret (reroll). Host puan bedelini kendi düşer; burada sadece
-# yeni seçenek seti üretilip tekrar sunulur. RNG ilerler -> her reroll farklı.
+# Kartları yeniden üret (reroll). Host puan bedelini kendi düşer.
 func reroll_choices() -> void:
 	if state != State.AWAITING_CHOICE:
 		return
 	current_choices = ChoiceGenerator.generate(run_state, catalog, rng)
 	choice_requested.emit(current_choices)
 
-# Kart uygulamadan CHOICE'u geç (puan yetmese de takılmasın). Sıradaki düğüme ilerle.
+# Kart uygulamadan CHOICE'u geç. Sıradaki düğüme ilerle.
 func skip_choice() -> void:
 	if state != State.AWAITING_CHOICE:
 		return
@@ -78,7 +92,6 @@ func apply_choice(index: int) -> void:
 	if index < 0 or index >= current_choices.size():
 		return
 	var opt: ChoiceOption = current_choices[index]
-	# Dönüşüm keşfi: seçim öncesi/sonrası her büyücünün form id'sini karşılaştır.
 	var before := _form_ids()
 	opt.apply(run_state)
 	choice_applied.emit(opt)
@@ -88,21 +101,39 @@ func apply_choice(index: int) -> void:
 			transformed.emit(run_state.loadout(cid).current_form)
 	_advance()
 
-# char_id -> güncel form id (dönüşüm tespiti için).
-func _form_ids() -> Dictionary:
-	var out: Dictionary = {}
-	for cid in run_state.party_order:
-		var lo: RunLoadout = run_state.loadouts[cid]
-		out[cid] = lo.current_form.id if lo.current_form != null else ""
-	return out
+# ROUTE seçimi: erişilebilir bir sonraki düğümü seç (StS harita). node_index = seçilen indeks.
+func choose(index: int) -> void:
+	if state != State.AWAITING_ROUTE:
+		return
+	if index not in current_node().next:
+		return   # erişilemez düğüm reddedilir (yalnız komşu sütun)
+	_enter(index)
 
 # --- İçsel akış ---
 
+# Mevcut düğümün haleftlerine göre ilerle: 0 -> bitir/uzat, 1 -> otomatik, >1 -> route.
 func _advance() -> void:
-	_enter(run_state.node_index + 1)
+	var succ: Array = current_node().next
+	if succ.is_empty():
+		# Endless: harita sona erdi -> uzat, yeni kenarları oku. Değilse run biter.
+		if run_state.endless and run_map != null:
+			run_map.extend(rng, run_state.depth)
+			nodes = run_map.nodes
+			succ = current_node().next
+		if succ.is_empty():
+			_finish_won()
+			return
+	if succ.size() == 1:
+		_enter(succ[0])
+	else:
+		route_options = []
+		for i in succ:
+			route_options.append(nodes[i])
+		state = State.AWAITING_ROUTE
+		route_requested.emit(run_map, route_options)
 
 func _enter(index: int) -> void:
-	if index >= nodes.size():
+	if index < 0 or index >= nodes.size():
 		_finish_won()
 		return
 	run_state.node_index = index
@@ -110,13 +141,26 @@ func _enter(index: int) -> void:
 	node_entered.emit(node)
 
 	match node.type:
-		RunNode.Type.BATTLE, RunNode.Type.BOSS:
+		RunNode.Type.BATTLE, RunNode.Type.BOSS, RunNode.Type.ELITE:
 			state = State.AWAITING_BATTLE
 			battle_requested.emit(node.enemies())
 		RunNode.Type.CHOICE:
 			current_choices = ChoiceGenerator.generate(run_state, catalog, rng)
 			state = State.AWAITING_CHOICE
 			choice_requested.emit(current_choices)
+		RunNode.Type.HEAL:
+			var amt := int(node.data.get("amount", 25))
+			for lo in run_state.loadouts.values():
+				lo.heal(amt)
+			room_resolved.emit(node)
+			_advance()
+		RunNode.Type.TREASURE:
+			var relic = node.data.get("relic", null)
+			if relic != null:
+				run_state.relics.append(relic)
+			run_state.orbs += int(node.data.get("orbs", 0))
+			room_resolved.emit(node)
+			_advance()
 		RunNode.Type.REWARD:
 			run_state.gold += int(node.data.get("gold", 0))
 			_finish_won()
@@ -124,3 +168,11 @@ func _enter(index: int) -> void:
 func _finish_won() -> void:
 	state = State.RUN_WON
 	run_ended.emit(true)
+
+# char_id -> güncel form id (dönüşüm tespiti için).
+func _form_ids() -> Dictionary:
+	var out: Dictionary = {}
+	for cid in run_state.party_order:
+		var lo: RunLoadout = run_state.loadouts[cid]
+		out[cid] = lo.current_form.id if lo.current_form != null else ""
+	return out

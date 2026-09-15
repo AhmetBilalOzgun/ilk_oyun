@@ -292,6 +292,38 @@ static func run(t) -> void:
 	t.eqf(float(tmo.last_breakdown.after_bonus), 30.0, "Storm sonrası cast 20*1.5=30")
 	t.check(tmo.combatants[0].pending_amp == 1.0, "amp tek kullanımda tükendi")
 
+	# --- Build: Zincir Patlama (on_kill_aoe) — party öldürünce komşulara patlar ---
+	t.section("build-on-kill-aoe")
+	var boom_sk := Skill.new("boom", "boom", "ember", 100, "Projectile", "")
+	var hero_b := _char("hb", 300, 50, [boom_sk])
+	var b1 := _foe("b1", 40, 1, [], [_bite()])
+	var b2 := _foe("b2", 200, 1, [], [_bite()])
+	var rsb := RelicSet.new()
+	rsb.add(Relic.new("boom", "", "", "on_kill_aoe", 0.6))
+	var tmb := TurnManager.new(_cfg(), rsb)
+	tmb.start_battle([hero_b], [b1, b2])
+	var bt: Combatant = tmb._alive_on(Combatant.Side.ENEMY)[0]
+	var bo: Combatant = tmb._alive_on(Combatant.Side.ENEMY)[1]
+	_act(tmb, boom_sk, bt, R.MISS)   # 100 taban -> b1(40) ölür; patlama 0.6*100=60 -> b2
+	t.check(not bt.is_alive(), "hedef öldü (patlama tetiklendi)")
+	t.check(bo.hp == 140, "komşu patlamadan 60 hasar aldı (200-60, got %d)" % bo.hp)
+
+	# --- Build: Patlama (basic_splash) — normal (AoE olmayan) saldırı komşulara yayılır ---
+	t.section("build-basic-splash")
+	var hit_sk := Skill.new("hit", "hit", "ember", 50, "Projectile", "")  # AoE değil
+	var hero_s := _char("hs", 300, 50, [hit_sk])
+	var sp1 := _foe("sp1", 200, 1, [], [_bite()])
+	var sp2 := _foe("sp2", 200, 1, [], [_bite()])
+	var rss := RelicSet.new()
+	rss.add(Relic.new("splash", "", "", "basic_splash", 0.5))
+	var tms := TurnManager.new(_cfg(), rss)
+	tms.start_battle([hero_s], [sp1, sp2])
+	var spt: Combatant = tms._alive_on(Combatant.Side.ENEMY)[0]
+	var spo: Combatant = tms._alive_on(Combatant.Side.ENEMY)[1]
+	_act(tms, hit_sk, spt, R.MISS)   # 50 hedefe; komşuya 0.5*50=25
+	t.check(spt.hp == 150, "hedef 50 hasar (200-50, got %d)" % spt.hp)
+	t.check(spo.hp == 175, "komşu splash 25 (200-25, got %d)" % spo.hp)
+
 # Ultimate Skill kur (requires_charge + durum etkileri).
 static func _mk_ult(id: String, base: int, effect: String, dot: float, stun: bool, aoe: bool) -> Skill:
 	var s := Skill.new(id, id, "ember", base, "Beam", effect)

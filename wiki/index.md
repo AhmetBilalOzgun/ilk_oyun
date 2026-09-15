@@ -15,11 +15,14 @@ Master catalog. Update on every ingest.
 - [[Rün Büyücüsü — Konsept]] — genel konsept
 - [[Ekran Düzeni]] · [[Rün Çizim Mekaniği]] · [[Kombo ve Palet]] · [[Düşman Tasarımı]]
 - [[Juice ve Geri Bildirim]] · [[Oturum Yapısı ve Başarısızlık]] · [[Can ve Hasar Sistemi]]
+- [[Makro Oyun — Yol Haritası]] — build keşfi, 3 katman, fazlı task listesi
+- [[Mastery / Battle-Pass]] — oynadıkça dolan barla arketip/eşya açılışı
 
 ## Decisions
 
 - [[Decisions Index]] — active decisions + key technical facts
 - [[Engine — Godot]] · [[Loadout Kısıtı]] · [[Sessiz Başarısızlık Yok]] · [[Zaaf Bonustur, Kapı Değil]] · [[Para Kazanma — Açık]]
+- [[Build Arketipi — Enhancement, Replacement Değil]] — makro build keşfi (2026-09-15)
 
 ## Deliverables
 

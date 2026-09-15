@@ -13,6 +13,7 @@ class_name SkillCatalog
 var forms: Dictionary = {}       # form_id -> MageForm
 var transforms: Dictionary = {}  # "from_id|rune_id" -> to_form_id
 var relics: Array = []           # Array[Relic]
+var archetypes: Array = []       # Array[Archetype] — form başına build katmanı havuzu
 
 func add_form(p_form: MageForm) -> void:
 	forms[p_form.id] = p_form
@@ -38,3 +39,14 @@ func acquirable_runes() -> Array:
 
 func add_relic(relic: Relic) -> void:
 	relics.append(relic)
+
+func add_archetype(a: Archetype) -> void:
+	archetypes.append(a)
+
+# Verilen forma uygulanabilir build arketipleri (CHOICE'ta teklif için).
+func archetypes_for(form_id: String) -> Array:
+	var out: Array = []
+	for a in archetypes:
+		if a.form_id == form_id:
+			out.append(a)
+	return out

@@ -16,6 +16,55 @@ static func run(t) -> void:
 	_test_level_unlock(t)
 	_test_serialize(t)
 	_test_rhythm_adaptive(t)
+	_test_mastery(t)
+	_test_mastery_serialize(t)
+
+# Battle-pass: mastery XP dolunca tier'lar HAK EDİLİR ama ödül ELLE toplanır (claim_next).
+static func _test_mastery(t) -> void:
+	t.section("mastery_battlepass")
+	var m := _meta()
+	t.check(m.mastery == 0 and m.claimed_tiers == 0, "başta mastery 0")
+	t.check(not m.is_archetype_unlocked("burn_build"), "başta Alev kilitli")
+	m.add_mastery(39)
+	t.check(m.claimable_count() == 0 and m.claimed_tiers == 0, "eşik altı (39): toplanacak yok")
+	m.add_mastery(1)   # 40 -> tier0 (burn) HAK EDİLDİ ama otomatik açılmaz
+	t.check(m.claimable_count() == 1, "40 mastery -> 1 tier hak edildi")
+	t.check(not m.is_archetype_unlocked("burn_build"), "toplanmadan Alev hâlâ kilitli")
+	var r := m.claim_next()
+	t.check(r.get("value") == "burn_build" and m.is_archetype_unlocked("burn_build"), "TOPLA -> Alev açıldı")
+	t.check(m.claimed_tiers == 1 and m.claimable_count() == 0, "1 tier toplandı")
+	t.check(m.claim_next().is_empty(), "toplanacak yokken claim {} döner")
+	m.add_mastery(200)  # 240 -> tier1(110 eşya) + tier2(200 İnfaz) hak edildi
+	t.check(m.claimable_count() == 2, "240 -> 2 tier hak edildi")
+	m.claim_next()      # tier1 eşya
+	t.check(m.is_owned("ember_boots"), "TOPLA -> Köz Çizme (eşya)")
+	m.claim_next()      # tier2 İnfaz
+	t.check(m.is_archetype_unlocked("execute_build"), "TOPLA -> İnfaz")
+	t.check(m.claimed_tiers == 3 and m.claimable_count() == 0, "iki tier tek tek toplandı")
+	var g0 := m.gold
+	m.add_mastery(80)         # 320 -> tier3 (para ödülü +200) hak edildi
+	t.check(m.gold == g0, "toplanmadan altın ödülü verilmez")
+	m.claim_next()
+	t.check(m.gold == g0 + 200, "TOPLA -> +200 altın ödülü")
+
+# Mastery + açılanlar to_dict/from_dict ile korunur (çifte ödül yok).
+static func _test_mastery_serialize(t) -> void:
+	t.section("mastery_serialize")
+	var m := _meta()
+	m.add_mastery(250)        # 3 tier hak edildi
+	while m.claimable_count() > 0:
+		m.claim_next()        # burn + ember_boots + execute topla
+	var d := m.to_dict()
+	var m2 := _meta()
+	m2.from_dict(d)
+	t.check(m2.mastery == m.mastery, "mastery serialize")
+	t.check(m2.claimed_tiers == m.claimed_tiers, "claimed_tiers serialize")
+	t.check(m2.is_archetype_unlocked("execute_build"), "açılan arketip serialize")
+	# yeniden yüklenince eski tier tekrar ödüllenmez
+	var before := m2.gold
+	t.check(m2.claimable_count() == 0, "reload sonrası toplanacak yok")
+	m2.claim_next()
+	t.check(m2.gold == before, "reload sonrası çifte ödül yok")
 
 static func _test_upgrade_costs(t) -> void:
 	t.section("meta_costs")

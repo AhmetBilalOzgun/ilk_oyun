@@ -230,6 +230,16 @@ func _apply_action(skill: Skill, target: Combatant, cast_bonus: float, quality: 
 			if not n.is_alive():
 				combatant_defeated.emit(n)
 
+	# Build: Patlama (basic_splash) — normal (AoE olmayan) party saldırısı da komşulara
+	# yayılır. Playstyle: tek hedef yerine alan. Splash düz (birincil hasarın bir oranı).
+	if by_party and not skill.aoe and relics.has("basic_splash"):
+		var sp := int(round(float(b.final_damage) * relics.amount("basic_splash", 0.0)))
+		if sp > 0:
+			for n in _neighbors_of(target):
+				n.take_damage(sp)
+				if not n.is_alive():
+					combatant_defeated.emit(n)
+
 	# Relic: Overcharge — Storm cast'inden sonra AKTÖRÜN bir sonraki cast'i güçlenir.
 	if active.side == Combatant.Side.PARTY and skill.effect == "Shatter":
 		active.pending_amp = relics.amount("post_storm_amp", 1.0)
@@ -242,6 +252,14 @@ func _apply_action(skill: Skill, target: Combatant, cast_bonus: float, quality: 
 	damage_resolved.emit(b, active, target)
 	if not target.is_alive():
 		combatant_defeated.emit(target)
+		# Build: Zincir Patlama (on_kill_aoe) — party öldürünce komşulara patlama.
+		if by_party and relics.has("on_kill_aoe"):
+			var boom := int(round(float(b.final_damage) * relics.amount("on_kill_aoe", 0.0)))
+			if boom > 0:
+				for n in _neighbors_of(target):
+					n.take_damage(boom)
+					if not n.is_alive():
+						combatant_defeated.emit(n)
 	var winner := _check_battle_end()
 	if winner != -1:
 		state = State.BATTLE_OVER

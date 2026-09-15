@@ -9,8 +9,10 @@ class_name ChoiceOption
 #   ACQUIRE_RUNE : params{char_id, rune_id, form} — büyücüyü yeni forma dönüştür.
 #   HEAL         : params{char_id, amount}  — canını doldur (char_id "" -> tüm parti).
 #   MAX_HP       : params{char_id, amount}  — max HP'yi kalıcı (run boyu) yükselt.
+#   ARCHETYPE    : params{char_id, archetype} — build katmanı (Burn/Crit/Explosion)
+#                  aktif forma bindirilir (kimlik-swap'ı değiştirmez, enhancement).
 
-enum Kind { ACQUIRE_RUNE, HEAL, MAX_HP, RELIC }
+enum Kind { ACQUIRE_RUNE, HEAL, MAX_HP, RELIC, ARCHETYPE }
 
 var kind: int
 var label: String
@@ -47,3 +49,7 @@ func apply(run_state: RunState) -> void:
 			var relic = params.get("relic", null)
 			if relic != null:
 				run_state.relics.append(relic)
+		Kind.ARCHETYPE:
+			var loa: RunLoadout = run_state.loadout(params.get("char_id", ""))
+			if loa != null:
+				loa.add_archetype(params.get("archetype", null))

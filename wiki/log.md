@@ -8,6 +8,76 @@ updated: 2026-09-06
 
 Append-only. **New entries go at the TOP.** Format:
 
+## [2026-09-15] feature | Değişim planı kalan 3 parça: mastery claim + StS node map + endless mode
+- Files changed: `scripts/meta/meta_progress.gd`, `scripts/home.gd`, `scripts/battle.gd`, `scripts/rpg/run/run_node.gd`, `stage_def.gd`, `run_manager.gd`, `run_content.gd`, `run_state.gd`; yeni `scripts/rpg/run/run_map.gd`; testler `test_meta_progress.gd`, `test_run_manager.gd`, yeni `tests/test_run_map.gd` + `run_tests.gd`
+- **Neden:** wiki'de "ertelendi" işaretli üç parça (kullanıcı istedi). Plan onaylı: `~/.claude/plans/starry-roaming-octopus.md`. → [[Makro Oyun — Yol Haritası]] [[Mastery / Battle-Pass]]
+- **(1) Mastery CLAIM butonu:** `add_mastery` artık ödülü SESSİZCE uygulamaz (sadece XP + save). Yeni `claimable_count()` + `claim_next()` (tek tier uygular, dict döner). `home.gd` nabızlı **"🎁 TOPLA (n)"** + ödül popup (aç→topla dopamini). `battle.gd` zaferde "ödül hazır" toast'u. Otomatik-açılış kaldırıldı.
+- **(2) StS node map (dallanmalı ilerleme):** `RunNode`'a `next:Array[int]`/`col`/`row` + HEAL/TREASURE türleri. Yeni `RunMap` (sütun DAG kabı + `link_combat`/`link_room`/`extend`). `RunManager` GRAF gezer: 0 haleften→bitir/uzat, 1→otomatik (lineer testler korunur), >1→**AWAITING_ROUTE** + `route_requested` + `choose(i)`. `RunContent.campaign_map(i,rng)` giriş→dallanan orta sütun(lar)→boss→reward (tutorial küçük). `battle.gd` **harita ekranı** (bottom→top sütunlar, Line2D bağlantılar, oda ikon/renk, erişilebilir=parıltı). `StageDef.linear` korundu (chain kenarları) → mevcut testler byte-uyumlu.
+- **(3) Gerçek endless mode + adaptive override:** home **"♾ ENDLESS"** girişi (`Meta.endless_run`). `RunContent.endless_map` + `RunMap.extender` (bitince RunManager `extend` çağırır, boss/reward yok). `RunState.endless`/`depth`. Ritim OVERRIDE: `battle._on_input_requested` endless'ta `maxf(adaptive, 1+depth·ENDLESS_RHYTHM_RAMP)` → derinlikle MONOTON hızlanır (adaptive yavaşlatma tabanı ezemez). Düğüm başı altın + ölümde BANKA (fail-soft), `Meta.endless_best_depth` (kalıcı).
+- Yeni `class_name RunMap` için global cache `--editor --quit` ile yenilendi. Test **253 geçti** (+24: claim/route/map/endless); home+battle headless smoke temiz. Harita UI + endless ritim + claim popup telefonda elle doğrulanmalı.
+
+## [2026-09-15] feature | Arketip görsel kimlik — CHOICE rozeti + sprite tint
+- Files changed: `scripts/rpg/archetype.gd`, `scripts/rpg/run/run_content.gd`, `scripts/battle.gd`
+- **Neden:** kullanıcı — arketip kartları daha belirgin olsun (üstte kutu); her arketip karakteri + animasyonları biraz değiştirsin.
+- **(1) CHOICE rozeti:** arketip seçeneği artık VBox içinde — üstte "◈ ARCHETYPE ◈" `PanelContainer` (StyleBoxFlat, arketip aksan renginde) + altta kart. `_archetype_badge(accent)`. Diğer kart türleri değişmedi.
+- **(2) Sprite tint:** `Archetype.tint` (Alev=kızıl-turuncu, İnfaz=altın-sarı, Patlama=kor-kırmızı). `battle._party_tint(c)` commit edilen arketibin rengini verir; `_process` büyücü modulate'ini boyar — rest = tint, cast = `parlak × tint`. Tüm animasyonlara (idle/cast/hurt) biner → karakter build'e göre görsel değişir. Yoksa WHITE.
+- Test **223 geçti**; battle smoke temiz. CHOICE rozeti + tint telefonda elle (headless'ta savaş kazanılmadan tetiklenmez). → [[Build Arketipi — Enhancement, Replacement Değil]]
+
+## [2026-09-15] feature | Battle-pass / Mastery track — arketipler artık AÇILARAK gelir
+- Files changed: `scripts/meta/mastery_track.gd` (yeni), `scripts/meta/meta_progress.gd`, `scripts/rpg/run/run_state.gd`, `choice_generator.gd`, `scripts/battle.gd`, `scripts/home.gd`, `tests/test_meta_progress.gd`, `tests/test_run_manager.gd`
+- **Neden:** kullanıcı yönü — arketipler/eşyalar rastgele çıkmasın; oynadıkça dolan barla **sırayla açılsın** (battle-pass, retention omurgası). → [[Mastery / Battle-Pass]]
+- **`MasteryTrack`** (yeni, pure): kümülatif eşikli sıralı ödül listesi (archetype/equipment/gold/crystal). `reached_tiers`/`next_need`/`next_label`.
+- **`MetaProgress`:** `mastery`/`claimed_tiers`/`unlocked_archetypes` + `add_mastery(n)` (dolan tier'ları SIRAYLA claim, ödül uygular, yeni açılanları döndürür) + `is_archetype_unlocked`. to_dict/from_dict'e eklendi (kalıcı, çifte ödül yok).
+- **Gating:** `RunState.unlocked_archetypes` (null=sınır yok; Array=yalnız bunlar). `ChoiceGenerator._archetype_candidates` filtreler. `battle.gd` run başında `Meta.unlocked_archetypes`'ı kopyalar + savaş zaferinde `add_mastery` (elite/boss bonus) + yeni açılış toast.
+- **UI:** `home.gd` mastery çubuğu (ProgressBar) + "Sıradaki: X (m/need)".
+- **Arketip erişimi artık 3 kapı:** açılmış (mastery) + build-bölümü (cadence) + commit edilmemiş (dışlayıcı).
+- Yeni class_name için global cache yenilendi. Test **223 geçti**; home+battle smoke temiz. Eşik/kazanç dengesi + claim etkileşimi telefonda/sonra. → [[Mastery / Battle-Pass]]
+
+## [2026-09-15] refactor | Arketip = DIŞLAYICI seçim (buff değil, yön commit'i)
+- Files changed: `scripts/rpg/archetype.gd`, `scripts/rpg/run/run_content.gd`, `choice_generator.gd`, `scripts/rpg/turn_manager.gd`, `scripts/battle.gd`, `tests/test_run_manager.gd`, `tests/test_turn_manager.gd`
+- **Neden:** kullanıcı geri bildirimi — arketipler "seçimi ifade etmeliydi (burn / tek-hedef infaz / alan)" ama stacklenen buff paketi gibiydi + isim "dönüşüm" vaat edip yapmıyordu. Karar: **dışlayıcı commit** (AskUserQuestion).
+- **Dışlayıcı:** `ChoiceGenerator._archetype_candidates` — büyücü zaten bir arketibe commit ettiyse (`archetypes` boş değil) HİÇ arketip sunmaz. "Burn VEYA İnfaz VEYA Patlama", diğer 2 o run kilit.
+- **Davranış farkı (sadece +sayı değil):** retheme + yeni hook. 🔥 **Alev** (burn_dmg_amp+dot_amp+burn_spread = DoT), 🎯 **İnfaz** (execute 2.5 + lifesteal = tek hedef bitir), 💥 **Patlama** (yeni `basic_splash` 0.5 + on_kill_aoe = alan/zincir).
+- **Yeni motor hook `basic_splash`** (`turn_manager._apply_action`): AoE olmayan party saldırısı komşulara `final_damage×amount` yayılır → Patlama tek-hedef yerine alan oynatır.
+- **UI:** `Archetype.icon` (arketip başına 🔥/🎯/💥); `battle._choice_icon` arketipin kendi ikonunu gösterir.
+- **Netleştirme:** arketip DÖNÜŞÜM DEĞİL (o kimlik-swap = Storm→Plazma). Arketip = form üstünde dışlayıcı build yönü.
+- **Açık kalan:** dokümanın "ayrı arketip-seçim ekranı" (3 seçenek yan yana tek ekran) hâlâ pool üzerinden tekli sunuluyor — ithal edilebilir follow-up. Test **206 geçti** (`build-basic-splash`, dışlayıcı). → [[Build Arketipi — Enhancement, Replacement Değil]]
+
+## [2026-09-15] feature | Build cadence — arketip yalnız build-bölümlerinde (task #4)
+- Files changed: `scripts/rpg/run/run_state.gd`, `run_content.gd`, `choice_generator.gd`, `scripts/battle.gd`, `tests/test_run_manager.gd`
+- **Ne + neden:** içerik maliyeti dengesi (kullanıcı kararı) — build-değişim (arketip teklifi) her 3-5 bölümde bir; kalan bölümler stat-meta grind. `RunContent.is_build_level(i)` = `i>=3 and (i-3)%BUILD_LEVEL_EVERY(4)==0` → i=3,7,11,15,19.
+- **Gating:** `RunState.allow_archetypes` (default true); `ChoiceGenerator._archetype_candidates` false ise boş döner. `battle.gd` run başında `run_state.allow_archetypes = RunContent.is_build_level(Meta.selected_level)`. Relic/dönüşüm/utility her bölümde açık kalır — sadece arketip gate'lenir.
+- Test **205 geçti** (`_test_archetype_cadence`); smoke temiz. Yakın-vade task listesi (1-4) TAMAM; #5 (endless adaptive override) endless fazına ertelendi. → [[Makro Oyun — Yol Haritası]]
+
+## [2026-09-15] feature | Elite battle — risk/reward (task #3)
+- Files changed: `scripts/rpg/run/run_node.gd`, `run_manager.gd`, `stage_def.gd`, `run_content.gd`, `scripts/battle.gd`, `tests/test_run_manager.gd`
+- **Ne + neden:** map'siz risk/reward savaşı (doküman §3). `RunNode.Type.ELITE` + `is_elite()`; `is_battle()` ELITE'i içerir; RunManager ELITE'i battle olarak sunar (`battle_requested`).
+- **Yerleşim:** `StageDef.linear`'a opsiyonel `elite_set` (boştan farklıysa boss'tan ÖNCE ELITE + CHOICE ekler; mevcut imza/testler korunur). `RunContent.stage_nodes` tutorial sonrası (i>=3) `_elite_set` (mauler+wraith, HP×1.7 / DMG×1.3) ekler.
+- **Ödül:** ELITE yenince orb `ELITE_ORB_MULT=2` ile katlanır (daha güçlü düşman → daha çok orb → relic/arketip alınabilir). `battle.gd` orb ödül dalı `rm.current_node().is_elite()` kontrol eder.
+- **UI:** elite savaşta status "☠ ELİT SAVAŞ" + turuncu renk + "çift orb!" flash.
+- **Kapsam notu:** doküman §3'teki "build'i sınayan özel kural" (hızlı ritim/direnç) ERTELENDİ — ilk impl sade (daha güçlü + çift orb). Test **198 geçti** (`_test_elite_node`); smoke temiz. → [[Makro Oyun — Yol Haritası]]
+
+## [2026-09-15] feature | Run-end summary ekranı (task #2)
+- Files changed: `scripts/battle.gd`
+- **Ne + neden:** run kapanış katmanı (doküman §5) — her savaş sonu DEĞİL, run sonu tek özet. Eski `_on_run_ended` sadece status label + home butonuydu; yerine `_show_run_summary(won, cry)`.
+- **Gösterir:** başlık (🏆 RUN TAMAMLANDI / 💀 RUN BİTTİ) + **BUILD** (her loadout `form_display_name()` = "Alev Kor Büyücü" + binen arketip adları) + toplanan relikler + **KAZANILAN** (+gold💰 +crystal💎) / kayıpta ilerleme. `_summary_label(text,size,col)` helper (pixel font + kontur). Ödül yazımı (Meta.add_gold/crystal/clear_level) korundu.
+- **Kapsam notu:** doküman §5'teki numeric Score + Best Score + New Discovery ERTELENDİ — skor formülü + discovery sistemi henüz karar/faz-2. Şimdilik "kazanılan değer" = gold (gerçek veri, uydurma skor yok). Telefonda elle doğrulanmalı (özet layout). → [[Makro Oyun — Yol Haritası]]
+
+## [2026-09-15] feature | Build arketip sistemi (task #1) — Ember Burn/Crit/Explosion
+- Files changed: `scripts/rpg/archetype.gd` (yeni), `scripts/rpg/run/choice_option.gd`, `run_loadout.gd`, `run_state.gd`, `skill_catalog.gd`, `choice_generator.gd`, `run_content.gd`, `scripts/rpg/turn_manager.gd`, `scripts/battle.gd`, `tests/test_run_manager.gd`, `tests/test_turn_manager.gd`
+- **Ne + neden:** makro build keşfinin çekirdeği (bkz [[Build Arketipi — Enhancement, Replacement Değil]]). Yeni `Archetype` = run build katmanı; **kimlik-swap'ı DEĞİŞTİRMEZ, üstüne biner** (enhancement). Combat gücü mevcut `RelicSet` kanca mekanizmasıyla akar — `RunState.relic_set()` her loadout'un `archetype_effects()`'ini de ekler → motor değişmeden çoğu efekt çalışır.
+- **ChoiceOption.Kind.ARCHETYPE** eklendi (apply → `loadout.add_archetype`); `ChoiceGenerator._archetype_candidates` + COST 24; `generate()` yeniden yapılandırıldı: dönüşüm (kimlik-swap) ana andır → build havuzu (arketip+relic) onu ezmesin diye AYRI tutulur, uygunsa 1 dönüşüm slotu GARANTİ.
+- **Ember havuzu (`run_content.ember_archetypes`):** Alev Yükü (burn_dmg_amp×1.6 + dot_amp×1.5 + burn_spread), Öldürücü Ritim (charge_gain_mult×1.5 + execute×2.2), Zincir Patlama (on_kill_aoe×0.6 + burn_spread).
+- **Tek yeni motor hook `on_kill_aoe`** (`turn_manager._apply_action` ölüm dalında): party öldürünce komşulara `final_damage×amount` patlama. Diğer efektler mevcut hook'ları yeniden kullanır.
+- **UI:** `battle.gd` CHOICE ikon 🔥 + ateş-kırmızı renk + parıltı (dönüşümle birlikte). `RunLoadout.form_display_name()` ön ek verir ("Alev Kor Büyücü").
+- **Not:** yeni class_name için `--editor --quit` ile global_script_class_cache yenilendi. Test **189 geçti** (`_test_archetype_choice`, `build-on-kill-aoe`); battle.tscn headless smoke temiz. Telefonda elle: CHOICE'ta arketip kartı + savaşta build hissi. → [[Makro Oyun — Yol Haritası]]
+
+## [2026-09-15] document | Makro oyun yol haritası + build arketip kararı
+- Files changed: `wiki/design/macro-game-roadmap.md` (yeni), `wiki/decisions/build-archetype-enhancement.md` (yeni), `wiki/design/_index.md`, `wiki/decisions/_index.md`, `wiki/index.md`, `wiki/hot.md`
+- **Neden:** kullanıcı "Makro Oyun — Tasarım Önerileri" dokümanını sundu; kritik + karar oturumu → makro yön netleşti. Kod yok, sadece plan.
+- **Kararlar:** (1) Build = **enhancement, replacement değil** — kimlik-swap durur, Burn/Crit/Explosion arketipi üstüne katman, uygulama yolu **B** (ayrı sistem + arketip başına efekt havuzu). (2) İçerik cadence: her **3-5 bölümde bir** build-node; kalan bölümler stat meta (emniyet ağı). (3) Endless'ta ritim **sürekli hızlanır** (adaptive override; campaign'de adaptive kalır). (4) Node map **ertelendi** ama backlog'da kesin. (5) Run-end summary erkene; **orb push-your-luck ertelendi**.
+- Karar: [[Build Arketipi — Enhancement, Replacement Değil]] · Yol haritası + task listesi: [[Makro Oyun — Yol Haritası]]
+
 ## [2026-09-15] feature | Adaptive ritim zorluğu (piano tiles hızı oyuncuya uyar)
 - **Neden:** oyun reflekse dayalı — 20 de 60 yaş da zevk alsın diye piano tiles HIZI oyuncunun gerçek oynayışına göre kendini ayarlar. Adaptive olan tek şey ritim hızı.
 - **İki skill (hız çarpanı) — `meta_progress.gd`:** `rhythm_skill` = KALICI global profil (kaydedilir, `RHYTHM_GLOBAL_GAIN=0.020`/cast, yavaş öğrenir) + `_rhythm_session` = OTURUM (RAM, kaydedilmez, `RHYTHM_SESSION_GAIN=0.080`/cast, hızlı tepki → kötü gün / el değişimi). Oturum ilk kullanımda kalıcıdan tohumlanır; uygulama kapanınca sıfırlanır.
