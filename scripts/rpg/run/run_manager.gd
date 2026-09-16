@@ -70,6 +70,13 @@ func report_battle_result(won: bool) -> void:
 		state = State.RUN_LOST
 		run_ended.emit(false)
 		return
+	# Zafer sayaçları (RunScore için): hangi tür savaş kazanıldı.
+	var n := current_node()
+	if n != null:
+		match n.type:
+			RunNode.Type.BOSS: run_state.bosses_won += 1
+			RunNode.Type.ELITE: run_state.elites_won += 1
+			_: run_state.battles_won += 1
 	# Boss dahil her savaş sonrası CHOICE (orb board + kart) — graf CHOICE düğümüyle gelir.
 	_advance()
 

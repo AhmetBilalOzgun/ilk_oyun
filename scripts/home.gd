@@ -3,6 +3,7 @@ extends Control
 const LEVEL_SELECT := "res://scenes/level_select.tscn"
 const CHARACTERS := "res://scenes/characters.tscn"
 const BATTLE := "res://scenes/battle.tscn"
+const CODEX := "res://scenes/codex.tscn"
 var _currency: Label
 var _mastery: VBoxContainer
 
@@ -32,12 +33,23 @@ func _ready() -> void:
 	add_child(hero)
 	hero.play("idle")
 	var box := VBoxContainer.new()
-	box.position = Vector2(170, 1010)
-	box.add_theme_constant_override("separation", 20)
+	box.position = Vector2(170, 1000)
+	box.add_theme_constant_override("separation", 14)
 	add_child(box)
-	box.add_child(_button("MACERAYA BAŞLA", _on_play, 120))
-	box.add_child(_button("SONSUZ YOLCULUK  ·  Rekor %d" % Meta.endless_best_depth, _on_endless))
-	box.add_child(_button("BÜYÜCÜ & EKİPMAN", _on_characters))
+	box.add_child(_button("MACERAYA BAŞLA", _on_play, 108))
+	box.add_child(_button("SONSUZ YOLCULUK  ·  Rekor %d" % Meta.endless_best_depth, _on_endless, 76))
+	# Meydan okuma satırı (günlük/haftalık — aynı gün herkes aynı harita, async yarış).
+	var chrow := HBoxContainer.new()
+	chrow.add_theme_constant_override("separation", 14)
+	chrow.add_child(_row_button("☀ GÜNLÜK", _on_daily))
+	chrow.add_child(_row_button("📅 HAFTALIK", _on_weekly))
+	box.add_child(chrow)
+	# Gezinme satırı (büyücü + kodeks).
+	var nav := HBoxContainer.new()
+	nav.add_theme_constant_override("separation", 14)
+	nav.add_child(_row_button("BÜYÜCÜ & EKİPMAN", _on_characters))
+	nav.add_child(_row_button("📖 KODEKS", _on_codex))
+	box.add_child(nav)
 	GameLook.card(self, Rect2(100, 1410, 880, 280))
 	_mastery = VBoxContainer.new()
 	_mastery.position = Vector2(130, 1435)
@@ -60,6 +72,11 @@ func _ready() -> void:
 	leave.custom_minimum_size.x = 240
 	GameLook.button(leave, GameLook.TEAL, 24)
 	utility.add_child(leave)
+	# DEV: kaydı sil + ilerlemeyi sıfırla (geliştirme testleri için hızlı reset).
+	var wipe := _button("🗑 SAVE SİL (DEV)", _on_wipe_save, 60)
+	wipe.custom_minimum_size.x = 360
+	GameLook.button(wipe, GameLook.CORAL, 24)
+	utility.add_child(wipe)
 
 func _build_mastery_bar() -> void:
 	for child in _mastery.get_children():
@@ -97,6 +114,19 @@ func _on_claim() -> void:
 	add_child(popup)
 	popup.popup_centered(Vector2i(650, 220))
 
+# DEV: onaylı kayıt silme. Onaydan sonra sıfırla + ana ekranı yeniden yükle.
+func _on_wipe_save() -> void:
+	var dlg := ConfirmationDialog.new()
+	dlg.title = "SAVE SİL"
+	dlg.dialog_text = "Tüm ilerleme (altın/kristal/seviye/ustalık/ipuçları) silinsin mi?"
+	dlg.confirmed.connect(func():
+		Meta.reset_progress()
+		dlg.queue_free()
+		get_tree().reload_current_scene())
+	dlg.canceled.connect(dlg.queue_free)
+	add_child(dlg)
+	dlg.popup_centered(Vector2i(760, 260))
+
 func _refresh_currency() -> void:
 	_currency.text = "ALTIN  %d                         KRİSTAL  %d" % [Meta.gold, Meta.crystal]
 
@@ -108,13 +138,42 @@ func _button(text: String, cb: Callable, height := 92) -> Button:
 	b.pressed.connect(cb)
 	return b
 
+# Yan yana iki buton için dar varyant (HBox satırı; 740'ın yarısı - separation).
+func _row_button(text: String, cb: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(363, 76)
+	GameLook.button(b, GameLook.TEAL, 24)
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b.pressed.connect(cb)
+	return b
+
 func _on_play() -> void:
 	Meta.endless_run = false
+	Meta.challenge_mode = ""
 	get_tree().change_scene_to_file(LEVEL_SELECT)
 
 func _on_endless() -> void:
 	Meta.endless_run = true
+	Meta.challenge_mode = ""
 	get_tree().change_scene_to_file(BATTLE)
+
+# Günlük/haftalık meydan okuma: seed'i tarihe göre sabitle, sabit zorlukta oyna.
+func _on_daily() -> void:
+	_start_challenge("daily", Challenge.daily_seed())
+
+func _on_weekly() -> void:
+	_start_challenge("weekly", Challenge.weekly_seed())
+
+func _start_challenge(mode: String, seed_val: int) -> void:
+	Meta.endless_run = false
+	Meta.challenge_mode = mode
+	Meta.challenge_seed = seed_val
+	Meta.selected_level = Challenge.CHALLENGE_LEVEL   # dünya arkaplanı + boss tier bundan
+	get_tree().change_scene_to_file(BATTLE)
+
+func _on_codex() -> void:
+	get_tree().change_scene_to_file(CODEX)
 
 func _on_characters() -> void:
 	get_tree().change_scene_to_file(CHARACTERS)

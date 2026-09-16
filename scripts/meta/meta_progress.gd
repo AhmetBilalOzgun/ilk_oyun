@@ -66,6 +66,14 @@ var _rhythm_session: float = -1.0     # OTURUM ritim skill'i (RAM; <0 => henüz 
 var mastery: int = 0                  # battle-pass XP (oynadıkça birikir, kaydedilir)
 var claimed_tiers: int = 0            # uygulanmış tier ödülü sayısı (çifte ödül önler)
 var unlocked_archetypes: Array = []   # açılan arketip id'leri (CHOICE'ta çıkabilir)
+var discovered: Array = []            # keşfedilen içerik anahtarları (bkz CodexData) — kodeks
+var best_score: int = 0               # en iyi campaign/endless run PUANI (bkz RunScore)
+var daily_best: Dictionary = {}       # günlük meydan: str(seed) -> en iyi skor
+var weekly_best: Dictionary = {}      # haftalık meydan: str(seed) -> en iyi skor
+var seen_hints: Dictionary = {}       # tutorial ipucu anahtarı -> true (ömür boyu bir kez göster)
+# Geçici (kaydedilmez) taşıyıcılar: home -> battle. challenge_mode "" => normal run.
+var challenge_mode: String = ""       # "" | "daily" | "weekly"
+var challenge_seed: int = 0
 
 func _ready() -> void:
 	load_game()
@@ -163,6 +171,56 @@ func _apply_tier_reward(t: Dictionary) -> void:
 
 func is_archetype_unlocked(id: String) -> bool:
 	return id in unlocked_archetypes
+
+# --- Keşif (kodeks) ---
+# Bir içerik ilk kez görülünce battle.gd discover(key) çağırır (bkz CodexData anahtarları).
+# Yeni keşifse true döner (UI "yeni!" gösterebilir) + kalıcı kaydeder.
+func discover(key: String) -> bool:
+	if key == "" or key in discovered:
+		return false
+	discovered.append(key)
+	save_game()
+	return true
+
+func is_discovered(key: String) -> bool:
+	return key in discovered
+
+# --- Tutorial ipuçları (deneyerek öğren) ---
+# Bir bağlamsal ipucu ilk kez gösterilince mark_hint_seen; sonraki oynanışlarda susar.
+# "Öğren -> bir kez ipucu -> sus" (durduran modal yok, sadece akıp giden _flash).
+func has_seen_hint(key: String) -> bool:
+	return bool(seen_hints.get(key, false))
+
+func mark_hint_seen(key: String) -> void:
+	if key == "" or seen_hints.get(key, false):
+		return
+	seen_hints[key] = true
+	save_game()
+
+# --- Run PUANI + meydan okuma tabloları ---
+# Normal (campaign/endless) run bitince skoru kaydet; yeni rekorsa true.
+func record_score(score: int) -> bool:
+	if score > best_score:
+		best_score = score
+		save_game()
+		return true
+	return false
+
+func _challenge_table(mode: String) -> Dictionary:
+	return daily_best if mode == "daily" else weekly_best
+
+# Günlük/haftalık meydan skoru kaydet (seed başına en iyi). Yeni rekorsa true.
+func record_challenge_score(mode: String, seed_val: int, score: int) -> bool:
+	var d := _challenge_table(mode)
+	var k := str(seed_val)
+	if score > int(d.get(k, 0)):
+		d[k] = score
+		save_game()
+		return true
+	return false
+
+func challenge_best(mode: String, seed_val: int) -> int:
+	return int(_challenge_table(mode).get(str(seed_val), 0))
 
 # --- Seviye ilerlemesi ---
 
@@ -268,6 +326,11 @@ func to_dict() -> Dictionary:
 		"claimed_tiers": claimed_tiers,
 		"unlocked_archetypes": unlocked_archetypes,
 		"endless_best_depth": endless_best_depth,
+		"discovered": discovered,
+		"best_score": best_score,
+		"daily_best": daily_best,
+		"weekly_best": weekly_best,
+		"seen_hints": seen_hints,
 	}
 
 func from_dict(d: Dictionary) -> void:
@@ -284,11 +347,25 @@ func from_dict(d: Dictionary) -> void:
 	claimed_tiers = int(d.get("claimed_tiers", 0))
 	unlocked_archetypes = d.get("unlocked_archetypes", [])
 	endless_best_depth = int(d.get("endless_best_depth", 0))
+	discovered = d.get("discovered", [])
+	best_score = int(d.get("best_score", 0))
+	daily_best = d.get("daily_best", {})
+	weekly_best = d.get("weekly_best", {})
+	seen_hints = d.get("seen_hints", {})
 
 # Aktif büyücüyü seç (oyun başı / karakterler ekranı) + kalıcı kaydet.
 func select_character(char_id: String) -> void:
 	selected_character = char_id
 	save_game()
+
+# DEV: kayıt dosyasını sil + tüm ilerlemeyi sıfırla (geliştirme yardımı). Dosyayı
+# yeniden yazmaz — silinmiş kalır (from_dict({}) tüm alanları varsayılana çeker).
+func reset_progress() -> void:
+	var d := DirAccess.open("user://")
+	if d != null and d.file_exists("meta.json"):
+		d.remove("meta.json")
+	from_dict({})
+	_rhythm_session = -1.0
 
 func save_game() -> void:
 	if not persist:

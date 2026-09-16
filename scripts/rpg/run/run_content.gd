@@ -188,13 +188,20 @@ static func stage_nodes(i: int) -> Array:
 	var ds := dmg_scale(i)
 	var sets := _tier_sets(i, hs, ds)
 	var boss := [_boss_for_level(i, hs, ds)]
-	# Tutorial sonrası (i>=3) boss'tan önce bir ELITE (risk/reward) savaşı; tutorial'da yok.
-	var elite: Array = _elite_set(i, hs, ds) if i >= 3 else []
+	# Tutorial sonrası boss'tan önce bir ELITE (risk/reward) savaşı; ilk 5 bölüm tutorial'da yok
+	# (deneyerek-öğren: zorluk spike'ı tutorial'ı bozmasın). bkz Tutorial.TUTORIAL_LEVELS.
+	var elite: Array = _elite_set(i, hs, ds) if i >= Tutorial.TUTORIAL_LEVELS else []
 	return StageDef.linear(sets, boss, reward_gold(i), elite)
 
 # Seviyeye göre 3 normal savaş düşman seti [b1,b2,b3] (tier eğrisi). stage_nodes + harita paylaşır.
 static func _tier_sets(i: int, hs: float, ds: float) -> Array:
-	if i < 3:
+	if i < 2:
+		# L1-L2: tek zayıf düşman — ritmi ve temel akışı güvenle öğren (ölmesi zor).
+		return [[_mob("grunt", hs, ds, 0)],
+			[_mob("grunt", hs, ds, 0)],
+			[_mob("runner", hs, ds, 0)]]
+	elif i < Tutorial.TUTORIAL_LEVELS:
+		# L3-L5: hâlâ nazik; 2'li set + ekonomi (orb/kart) ve ilk build tanıtılır.
 		return [[_mob("grunt", hs, ds, 0)],
 			[_mob("grunt", hs, ds, 0), _mob("archer", hs, ds, 1)],
 			[_mob("brute", hs, ds, 0)]]
@@ -235,11 +242,12 @@ static func campaign_map(i: int, rng: RandomNumberGenerator) -> RunMap:
 	# Giriş sütunu: tek savaş (StS gibi tek başlangıç, sonra dallanır).
 	var entry := m.add_room(_battle_room(i, hs, ds, rng, 0, 0))
 	m.push_column([entry])
-	# Orta sütun(lar): tutorial 1, sonrası 3. Genişlik 2-3, tür karışık (i>=3 elite/heal/hazine).
-	var mid_cols := 1 if i < 3 else 3
+	# Orta sütun(lar): tutorial küçük harita, sonrası 3. Genişlik 2-3, tür karışık (tutorial
+	# sonrası elite/heal/hazine). İlk 5 bölüm nazik ramp (bkz Tutorial.TUTORIAL_LEVELS).
+	var mid_cols := 1 if i < 2 else (2 if i < Tutorial.TUTORIAL_LEVELS else 3)
 	var prev: Array = [entry]
 	for c in range(mid_cols):
-		var width := 2 if (i < 3 or rng.randf() < 0.5) else 3
+		var width := 2 if (i < Tutorial.TUTORIAL_LEVELS or rng.randf() < 0.5) else 3
 		var col_rooms: Array = []
 		for r in range(width):
 			var kind := _pick_room_kind(i, c, mid_cols, rng)
@@ -279,7 +287,8 @@ static func _extend_endless(m: RunMap, rng: RandomNumberGenerator, _depth: int) 
 		var width := 2 + (1 if rng.randf() < 0.4 else 0)
 		var col_rooms: Array = []
 		for r in range(width):
-			var kind := _pick_room_kind(maxi(3, lvl), c, 99, rng)  # endless: her zaman tam havuz
+			# endless: her zaman tam havuz (tutorial değil) -> gate'i geç.
+			var kind := _pick_room_kind(maxi(Tutorial.TUTORIAL_LEVELS, lvl), c, 99, rng)
 			col_rooms.append(m.add_room(_room_node(m, kind, lvl, hs, ds, rng, m.next_col, r)))
 		m.push_column(col_rooms)
 		_wire(m, prev, col_rooms, rng)
@@ -319,7 +328,7 @@ static func _proj(i: int, n: int, mm: int) -> int:
 # Oda türü seçimi: ağırlıklı — çoğu SAVAŞ, i>=3'te ELITE/HEAL/HAZİNE. Boss'a yakın sütunlar
 # (endless'ta hep) daha çok elite. İlk sütun daha güvenli.
 static func _pick_room_kind(i: int, col: int, _total: int, rng: RandomNumberGenerator) -> int:
-	if i < 3:
+	if i < Tutorial.TUTORIAL_LEVELS:
 		return RunNode.Type.BATTLE
 	var roll := rng.randf()
 	if roll < 0.60:

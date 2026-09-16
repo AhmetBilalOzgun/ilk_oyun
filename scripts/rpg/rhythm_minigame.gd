@@ -1,8 +1,11 @@
 extends Node2D
 class_name RhythmMinigame
 
-# Sıradaki jest ortada büyük: soluktan belirgine geçer. Halka kapanınca hareket et.
-# Altındaki küçük işaretler yalnız önizleme; girdi daima büyük işarete uygulanır.
+# Sektör standardı ritim şeridi (Guitar Hero / Beatstar okunurluğu):
+# Notalar sağdan sola akar, SABİT İSABET ÇİZGİSİNE varınca jesti yap.
+# Tek referans = çizgi. Notalar aynı anda görünür, oyuncu "ne zaman"ı çizgiden okur.
+# FAIL-SOFT per-nota: yanlış yön ya da kaçan pencere yalnız O notayı düşürür —
+# komboyu ÖLDÜRMEZ, kalan notalar akmaya devam eder (oyunun sessiz-başarısızlık-yok ilkesi).
 # Motor sözleşmesi aynı: tile_resolved + finished, fail-soft kombo skoru.
 
 # Her tile çözülünce (index, toplam, InputEvaluator.Result, finisher mi, hasar payı 0..1).
@@ -14,13 +17,14 @@ const BEAT_BASE := 0.64       # notalar arası temel süre (sn) ~ 94 BPM
 const SPEED_BASE := 480.0     # nota kayma temel hızı (px/sn)
 const SPEED_MIN_SCALE := 0.6  # hız çarpanı tabanı (<1.0: adaptive kolaylaştırma — yeni/60 yaş)
 const SPEED_MAX_SCALE := 2.2  # hız çarpanı tavanı (waveler geçtikçe artan)
-const PERFECT_WINDOW := 0.13  # ±sn: bu kadar yakınsa PERFECT
-const GOOD_WINDOW := 0.30     # ±sn: bu kadar yakınsa GOOD
-const TAIL := 0.22            # son nota geçtikten sonra bekleme
+const PERFECT_WINDOW := 0.16  # ±sn: bu kadar yakınsa PERFECT (geniş — okunurluk)
+const GOOD_WINDOW := 0.36     # ±sn: bu kadar yakınsa GOOD
+const TAIL := 0.28            # son nota geçtikten sonra bekleme
 const SWIPE_MIN_DIST := 35.0  # jest kaydırma eşiği (px)
 const FINISHER_WEIGHT := 2.0  # son tile'ın hasar ağırlığı (normal tile = 1.0)
 const Q_PERFECT := 1.0        # kalite katsayıları (fraction hesabı)
 const Q_GOOD := 0.6
+const HIT_HALF := 92.0        # isabet çizgisi görsel yarı-yükseklik (px)
 const PIXEL_FONT = preload("res://assets/fonts/PixelifySans-Bold.ttf")
 
 # 5 yön havuzu — dizi buradan rastgele üretilir.
@@ -33,24 +37,22 @@ const STEP_POOL := [
 ]
 
 var _rect: Rect2
-var _hit_x: float
+var _hit_x: float             # SABİT isabet çizgisi x'i
 var _track_y: float
-var _spawn_x: float
-var _lead: float              # ilk notanın hedefe varış süresi
+var _lane_right: float        # notaların doğduğu sağ kenar
+var _lead: float              # ilk notanın çizgiye varış süresi (spawn->hit)
 var _beat: float = BEAT_BASE  # bu cast'in nota aralığı (hız ölçeğine göre kısalır)
 var _speed: float = SPEED_BASE # bu cast'in kayma hızı (hız ölçeğine göre artar)
 var _steps: Array = []
 var _notes: Array = []        # {node, t, hit, result, step, is_finisher, weight}
 var _clock := 0.0
 var _finished := false
-var _broke := false
+var _missed := 0              # kaç nota ıskalandı (broke hesabı)
 var _sum_w := 1.0             # toplam ağırlık (fraction normalizasyonu)
 var _hint: Label
-var _ring: Node2D
-var _phase := 0.0
-var _current := -1
-var _revealed_at := 0.0
+var _line: Node2D             # sabit isabet çizgisi + bant
 var _timing_label: Label
+var _line_glow := 0.0         # çizgi vurgusu (yakın nota olunca yükselir)
 
 var _touch_start_pos := Vector2.ZERO
 var _touch_active := false
@@ -71,10 +73,11 @@ func setup(combo_len: int, rect: Rect2, speed_scale: float = 1.0) -> void:
 		_steps.append(STEP_POOL[randi() % STEP_POOL.size()])
 	# Ağırlık toplamı: (n-1) normal + finisher.
 	_sum_w = float(maxi(0, n - 1)) * 1.0 + FINISHER_WEIGHT
-	_hit_x = rect.get_center().x
-	_track_y = rect.position.y + rect.size.y * 0.43
-	_lead = 0.72
-	_spawn_x = _hit_x + _lead * _speed
+	# İsabet çizgisi solda-ortada; notalar sağ kenardan doğup çizgiye akar.
+	_hit_x = _rect.position.x + _rect.size.x * 0.30
+	_track_y = _rect.position.y + _rect.size.y * 0.46
+	_lane_right = _rect.end.x - 60.0
+	_lead = maxf(0.35, (_lane_right - _hit_x) / _speed)
 	_build_frame()
 	_build_notes()
 	_update_hint()
@@ -84,27 +87,43 @@ func setup(combo_len: int, rect: Rect2, speed_scale: float = 1.0) -> void:
 
 func _build_frame() -> void:
 	GameLook.card(self, _rect)
-	_ring = Node2D.new()
-	_ring.z_index = 1
-	_ring.draw.connect(_draw_timing)
-	add_child(_ring)
-	_hint = GameLook.label("HALKA KAPANINCA HAREKET ET", 28)
-	_hint.position = _rect.position + Vector2(20, 20)
+	_line = Node2D.new()
+	_line.z_index = 1
+	_line.draw.connect(_draw_line)
+	add_child(_line)
+	_hint = GameLook.label("NOTA ÇİZGİYE GELİNCE JESTİ YAP", 28)
+	_hint.position = _rect.position + Vector2(20, 16)
 	_hint.size.x = _rect.size.x - 40
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_hint)
 	_timing_label = GameLook.label("HAZIRLAN", 34)
-	_timing_label.position = Vector2(_rect.position.x, _track_y + 148)
+	_timing_label.position = Vector2(_rect.position.x, _track_y + HIT_HALF + 26)
 	_timing_label.size.x = _rect.size.x
 	_timing_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_timing_label)
 
-func _draw_timing() -> void:
+# Sabit isabet çizgisi: GOOD penceresi genişliğinde soluk bant + PERFECT çekirdeği + dikey çizgi.
+func _draw_line() -> void:
 	if _finished:
 		return
-	var center := Vector2(_hit_x, _track_y)
-	_ring.draw_arc(center, 132, 0, TAU, 64, Color("d4dfd3"), 6)
-	_ring.draw_arc(center, 132, -PI / 2, -PI / 2 + TAU * maxf(0.005, _phase), 64, GameLook.TEAL, 9)
+	var top := Vector2(_hit_x, _track_y - HIT_HALF)
+	var bot := Vector2(_hit_x, _track_y + HIT_HALF)
+	# GOOD bandı (geniş, soluk) — "buraya kadar iyi" hissi.
+	var good_w: float = GOOD_WINDOW * _speed
+	_line.draw_rect(Rect2(_hit_x - good_w, _track_y - HIT_HALF, good_w * 2.0, HIT_HALF * 2.0),
+		Color(GameLook.TEAL.r, GameLook.TEAL.g, GameLook.TEAL.b, 0.10))
+	# PERFECT çekirdeği (dar, parlak).
+	var perf_w: float = PERFECT_WINDOW * _speed
+	_line.draw_rect(Rect2(_hit_x - perf_w, _track_y - HIT_HALF, perf_w * 2.0, HIT_HALF * 2.0),
+		Color(GameLook.TEAL.r, GameLook.TEAL.g, GameLook.TEAL.b, 0.18 + 0.35 * _line_glow))
+	# Dikey isabet çizgisi (parlar).
+	var lc: Color = GameLook.TEAL.darkened(0.15).lerp(GameLook.CREAM, _line_glow)
+	_line.draw_line(top, bot, lc, 7.0)
+	# Küçük üçgen işaretçiler (üstte/altta çizgiyi vurgular).
+	_line.draw_colored_polygon(PackedVector2Array([
+		top + Vector2(-14, -18), top + Vector2(14, -18), top]), lc)
+	_line.draw_colored_polygon(PackedVector2Array([
+		bot + Vector2(-14, 18), bot + Vector2(14, 18), bot]), lc)
 
 func _build_notes() -> void:
 	for i in range(_steps.size()):
@@ -112,9 +131,8 @@ func _build_notes() -> void:
 		var is_fin: bool = i == _steps.size() - 1
 		var t: float = _lead + float(i) * _beat
 		var node := Node2D.new()
-		node.position = Vector2(_spawn_x, _track_y)
+		node.position = Vector2(_lane_right, _track_y)
 		node.z_index = 2
-
 		var tile := _create_pixel_tile(step_val, is_fin)
 		node.add_child(tile)
 		add_child(node)
@@ -165,53 +183,67 @@ func _update_hint() -> void:
 	for n in _notes:
 		if n.get("hit", false):
 			done += 1
-	_hint.text = "HALKA KAPANINCA HAREKET ET   %d / %d" % [mini(done + 1, _notes.size()), _notes.size()]
+	_hint.text = "NOTA ÇİZGİYE GELİNCE JESTİ YAP   %d / %d" % [mini(done + 1, _notes.size()), _notes.size()]
 
-func _first_pending() -> int:
+# Çizgiye zaman olarak EN YAKIN vurulmamış nota (lane'de birden fazla görünürken doğru hedef).
+func _nearest_pending() -> int:
+	var best := -1
+	var best_err := 1e9
 	for i in range(_notes.size()):
-		if not _notes[i]["hit"]:
-			return i
-	return -1
+		if _notes[i]["hit"]:
+			continue
+		var err: float = absf(float(_notes[i]["t"]) - _clock)
+		if err < best_err:
+			best_err = err
+			best = i
+	return best
 
 func _process(delta: float) -> void:
 	if _finished or not is_inside_tree():
 		return
 	_clock += delta
-	var first := _first_pending()
-	if first < 0:
-		_finish()
+	# Notaları çizgiye göre konumla (x = çizgi + kalan_süre × hız). Kaçan pencere -> MISS (devam).
+	for i in range(_notes.size()):
+		var note: Dictionary = _notes[i]
+		if note["hit"]:
+			continue
+		var node: Node2D = note["node"]
+		if is_instance_valid(node):
+			var x: float = _hit_x + (float(note["t"]) - _clock) * _speed
+			node.position = Vector2(x, _track_y)
+			node.scale = Vector2.ONE * (1.25 if note["is_finisher"] else 1.0)
+			# Çizgiye yakınken hafif büyü + tam opak; uzakken biraz soluk.
+			var near: float = clampf(1.0 - absf(x - _hit_x) / (GOOD_WINDOW * _speed + 1.0), 0.0, 1.0)
+			node.scale *= 1.0 + 0.22 * near
+			node.modulate.a = lerpf(0.55, 1.0, near)
+		# Pencere tamamen geçti -> ıska (fail-soft, komboyu bitirmez).
+		if _clock > float(note["t"]) + GOOD_WINDOW:
+			_miss_note(i, "ISKA!")
+	# Çizgi vurgusu: en yakın notanın yakınlığına göre.
+	var nearest := _nearest_pending()
+	if nearest < 0:
+		# Tüm notalar çözüldü -> kısa kuyruk sonra bitir.
+		if _clock > _last_time() + TAIL:
+			_finish()
+		_line_glow = 0.0
+		_line.queue_redraw()
 		return
-	if first != _current:
-		_current = first
-		_revealed_at = _clock
-	var current: Dictionary = _notes[first]
-	var target_time: float = current["t"]
-	_phase = clampf((_clock - _revealed_at) / maxf(0.01, target_time - _revealed_at), 0, 1)
-	var now := absf(target_time - _clock) <= PERFECT_WINDOW
-	var action: String = ["TAP · DOKUN", "SOLA KAYDIR", "SAĞA KAYDIR", "YUKARI KAYDIR", "AŞAĞI KAYDIR"][int(current["step"])]
+	var cur: Dictionary = _notes[nearest]
+	var err: float = absf(float(cur["t"]) - _clock)
+	_line_glow = clampf(1.0 - err / GOOD_WINDOW, 0.0, 1.0)
+	var now := err <= PERFECT_WINDOW
+	var action: String = ["DOKUN", "SOLA KAYDIR", "SAĞA KAYDIR", "YUKARI KAYDIR", "AŞAĞI KAYDIR"][int(cur["step"])]
 	_timing_label.text = ("ŞİMDİ!  " if now else "HAZIRLAN  ") + action
-	if current["is_finisher"]:
+	if cur["is_finisher"]:
 		_timing_label.text += " · SON VURUŞ"
 	_timing_label.add_theme_color_override("font_color", GameLook.TEAL.darkened(0.3) if now else GameLook.INK)
-	var remaining := _notes.size() - first - 1
-	for i in range(first, _notes.size()):
-		var node: Node2D = _notes[i]["node"]
-		if not is_instance_valid(node):
-			continue
-		if i == first:
-			node.position = Vector2(_hit_x, _track_y)
-			node.scale = Vector2.ONE * 2.45
-			node.modulate.a = lerpf(0.16, 1.0, _phase)
-		else:
-			node.position = Vector2(_hit_x + (i - first - 1 - (remaining - 1) * 0.5) * 105, _rect.end.y - 73)
-			node.scale = Vector2.ONE * 0.8
-			node.modulate.a = 0.55 if i == first + 1 else 0.32
-	_ring.queue_redraw()
-	if _clock > target_time + GOOD_WINDOW:
-		current["hit"] = true
-		current["result"] = InputEvaluator.Result.MISS
-		tile_resolved.emit(first, _notes.size(), InputEvaluator.Result.MISS, current["is_finisher"], 0.0)
-		_break_combo()
+	_line.queue_redraw()
+
+func _last_time() -> float:
+	var t := 0.0
+	for n in _notes:
+		t = maxf(t, float(n["t"]))
+	return t
 
 # --- Girdi (Jest Algılama: TAP & SWIPE) ---
 
@@ -261,34 +293,36 @@ func _vector_to_step(diff: Vector2) -> int:
 	else:
 		return InputSequence.Step.SWIPE_DOWN if diff.y > 0 else InputSequence.Step.SWIPE_UP
 
-# Jest sonucunu çizgiye en yakın VURULMAMIŞ notaya eşle (yön + zamanlama).
+# Jesti çizgiye zaman olarak EN YAKIN vurulmamış notaya eşle. FAIL-SOFT: yanlış yön/kaçış
+# yalnız o notayı düşürür; kombo devam eder.
 func _register_gesture(detected_step: int) -> void:
-	# Always resolve the displayed large cue, even when fast timing windows overlap.
-	var first := _first_pending()
-	if first < 0:
+	var idx := _nearest_pending()
+	if idx < 0:
 		return
-	var best: Dictionary = _notes[first]
+	var best: Dictionary = _notes[idx]
 	var best_err := absf(float(best["t"]) - _clock)
 	if best_err > GOOD_WINDOW:
-		_timing_label.text = "BİRAZ BEKLE · HALKAYI İZLE"
+		# Henüz erken -> notayı harcama, çizgiyi izlemesini söyle.
+		_timing_label.text = "BİRAZ BEKLE · ÇİZGİYİ İZLE"
 		return
 
 	best["hit"] = true
 	var req_step: int = int(best.get("step", InputSequence.Step.TAP))
 	var raw_node = best.get("node", null)
-	var idx := _index_of(best)
 	var is_fin: bool = best["is_finisher"]
 
 	if detected_step != req_step:
-		# Jest yönü yanlış! -> KOMBO KIRILIR.
+		# Yanlış yön -> bu nota ıskalandı ama kombo YAŞAR (fail-soft).
 		best["result"] = InputEvaluator.Result.MISS
-		_pop("YANLIŞ YÖN!", Color(1.0, 0.35, 0.35))
+		_missed += 1
+		_pop("YANLIŞ YÖN!", Color(1.0, 0.55, 0.4))
 		if is_instance_valid(raw_node):
 			_fade_note(raw_node as Node2D)
 		tile_resolved.emit(idx, _notes.size(), InputEvaluator.Result.MISS, is_fin, 0.0)
-		_break_combo()
+		_update_hint()
 		return
-	elif best_err <= PERFECT_WINDOW:
+
+	if best_err <= PERFECT_WINDOW:
 		best["result"] = InputEvaluator.Result.PERFECT
 		_pop("MÜKEMMEL!", Color(0.35, 1.0, 0.5))
 		Input.vibrate_handheld(40)   # haptik: yalnız MÜKEMMEL isabette
@@ -296,7 +330,7 @@ func _register_gesture(detected_step: int) -> void:
 		best["result"] = InputEvaluator.Result.GOOD
 		_pop("HARİKA!", Color(1.0, 0.85, 0.25))
 
-	_flash_ring()
+	_flash_line()
 	if is_instance_valid(raw_node):
 		_fade_note(raw_node as Node2D)
 	# Hasar payı: ağırlık × kalite / toplam ağırlık.
@@ -305,26 +339,20 @@ func _register_gesture(detected_step: int) -> void:
 	tile_resolved.emit(idx, _notes.size(), best["result"], is_fin, fraction)
 	_update_hint()
 
-func _index_of(note: Dictionary) -> int:
-	for i in range(_notes.size()):
-		if _notes[i] == note:
-			return i
-	return 0
-
-# Kombo kırıldı: kalan tile'ları söndür, kısa bekleyip bitir (finisher düşer).
-func _break_combo() -> void:
-	if _broke or _finished:
+# Kaçan pencere -> nota ıskalandı (fail-soft). Komboyu bitirmez.
+func _miss_note(idx: int, txt: String) -> void:
+	var note: Dictionary = _notes[idx]
+	if note["hit"]:
 		return
-	_broke = true
-	for n in _notes:
-		if not n.get("hit", false):
-			n["hit"] = true
-			n["result"] = InputEvaluator.Result.MISS
-			var rn = n.get("node", null)
-			if is_instance_valid(rn):
-				_fade_note(rn as Node2D)
+	note["hit"] = true
+	note["result"] = InputEvaluator.Result.MISS
+	_missed += 1
+	var rn = note.get("node", null)
+	if is_instance_valid(rn):
+		_fade_note(rn as Node2D)
+	_pop(txt, Color(0.85, 0.6, 0.5))
+	tile_resolved.emit(idx, _notes.size(), InputEvaluator.Result.MISS, note["is_finisher"], 0.0)
 	_update_hint()
-	_finish()
 
 func _finish() -> void:
 	if _finished:
@@ -333,6 +361,7 @@ func _finish() -> void:
 	finished.emit(_result_payload())
 
 # Toplam kombo skoru (0..1): tutturulan tile paylarının toplamı.
+# broke: hard-break yok; notaların yarısından çoğu ıskalandıysa "zorlandı" say (adaptive için).
 func _result_payload() -> Dictionary:
 	var score := 0.0
 	for n in _notes:
@@ -341,7 +370,8 @@ func _result_payload() -> Dictionary:
 			score += float(n["weight"]) * Q_PERFECT / _sum_w
 		elif r == InputEvaluator.Result.GOOD:
 			score += float(n["weight"]) * Q_GOOD / _sum_w
-	return {"combo_score": clampf(score, 0.0, 1.0), "broke": _broke, "tiles": _notes.size()}
+	var broke: bool = _missed * 2 > _notes.size()
+	return {"combo_score": clampf(score, 0.0, 1.0), "broke": broke, "tiles": _notes.size()}
 
 # --- Görsel yardımcı ---
 
@@ -353,7 +383,7 @@ func _pop(txt: String, col: Color) -> void:
 	lbl.add_theme_color_override("font_color", col)
 	lbl.add_theme_constant_override("outline_size", 8)
 	lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.08, 1.0))
-	lbl.position = Vector2(_hit_x - 90.0, _rect.position.y - 48.0)
+	lbl.position = Vector2(_hit_x - 90.0, _track_y - HIT_HALF - 44.0)
 	lbl.z_index = 5
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(lbl)
@@ -362,12 +392,12 @@ func _pop(txt: String, col: Color) -> void:
 	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.5)
 	tw.tween_callback(lbl.queue_free)
 
-func _flash_ring() -> void:
-	if _ring == null:
+func _flash_line() -> void:
+	if _line == null:
 		return
 	var tw := create_tween()
-	tw.tween_property(_ring, "modulate", Color(1.3, 1.3, 1.0), 0.06)
-	tw.tween_property(_ring, "modulate", Color.WHITE, 0.12)
+	tw.tween_property(_line, "modulate", Color(1.3, 1.3, 1.0), 0.06)
+	tw.tween_property(_line, "modulate", Color.WHITE, 0.12)
 
 func _fade_note(node: Node2D) -> void:
 	if not is_instance_valid(node):

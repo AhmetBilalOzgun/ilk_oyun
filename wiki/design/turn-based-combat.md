@@ -84,9 +84,17 @@ code_anchors:
   - repo: game
     symbol: MetaProgress.record_rhythm_result
     file: scripts/meta/meta_progress.gd
+  - repo: game
+    symbol: Tutorial
+    file: scripts/meta/tutorial.gd
+  - repo: game
+    symbol: Battle._tutorial_hint
+    file: scripts/battle.gd
 ---
 
-> **2026-09-16 revizyonu:** Güncel görsel/ritim yönü için [[Tatlış Büyücüler ve Açık Hava Görsel Dili]]. Kayan şerit kaldırıldı: büyük soluktan belirgine gelen aktif ok/TAP ve altta küçük kuyruk var. Plazmada kritik/patlama/kör etme arketipleri eklendi; kör etme düşman saldırısına %35 tam ıska uygular. Aşağıdaki piano-tiles/yalnız tint/plazma havuzu ertelendi açıklamaları tarihsel.
+> **2026-09-16 ritim standardı + tutorial revizyonu (GÜNCEL):** Ritim minigame sektör standardına (Beatstar/Guitar Hero) çekildi — **SABİT dikey isabet çizgisi**, notalar sağdan sola akar (`x = _hit_x + (t-_clock)·_speed`), her nota kendi ikonunu (●/◀▶▲▼) taşır, PERFECT/GOOD bandı görünür. **FAIL-SOFT per-nota**: `_break_combo` KALDIRILDI — yanlış yön/kaçan pencere yalnız o notayı düşürür (`_miss_note`), kalanlar akar; `broke = _missed*2 > tiles`. Bir alttaki "kayan şerit kaldırıldı / büyük reveal + kuyruk" açıklaması artık tarihsel. **İlk 5 bölüm = deneyerek-öğren tutorial** (durduran text-box yok): `Tutorial.rhythm_caps(level)` ritim zorluğunu kademeli tavanlar (L1 tek yavaş nota→L5 serbest), `battle._tutorial_hint(key)` bağlamsal ipucu akıp giden `_flash` ile ömür boyu bir kez (`Meta.seen_hints`). `RunContent` tutorial eşiği `i<TUTORIAL_LEVELS(5)`; elite/heal/dallanma yalnız sonrası.
+
+> **2026-09-16 revizyonu (tarihsel):** Güncel görsel/ritim yönü için [[Tatlış Büyücüler ve Açık Hava Görsel Dili]]. Kayan şerit kaldırıldı: büyük soluktan belirgine gelen aktif ok/TAP ve altta küçük kuyruk var. Plazmada kritik/patlama/kör etme arketipleri eklendi; kör etme düşman saldırısına %35 tam ıska uygular. Aşağıdaki piano-tiles/yalnız tint/plazma havuzu ertelendi açıklamaları tarihsel.
 
 
 # Turn-Based Savaş ve QTE

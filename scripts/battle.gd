@@ -139,15 +139,29 @@ func _ready() -> void:
 		c.max_hp += Meta.hp_bonus(c.id) + Meta.equipped_hp_bonus()
 		c.speed += Meta.equipped_speed_bonus()
 	run_state = RunState.new(party, RunContent.start_forms(catalog))
-	run_state.endless = Meta.endless_run
-	# Build cadence: arketip teklifi yalnız build-bölümlerinde; endless'ta hep açık.
-	run_state.allow_archetypes = true if run_state.endless else RunContent.is_build_level(Meta.selected_level)
+	# Meydan okuma (günlük/haftalık): endless değil, sabit zorluk + build teklifi açık.
+	var challenge := Meta.challenge_mode
+	run_state.endless = Meta.endless_run and challenge == ""
+	# Build cadence: arketip teklifi yalnız build-bölümlerinde; endless/meydan'da hep açık.
+	if run_state.endless or challenge != "":
+		run_state.allow_archetypes = true
+	else:
+		run_state.allow_archetypes = RunContent.is_build_level(Meta.selected_level)
 	# Battle-pass: yalnız mastery ile AÇILMIŞ arketipler CHOICE havuzunda çıkabilir.
 	run_state.unlocked_archetypes = Meta.unlocked_archetypes.duplicate()
+	# Başlangıç formları keşfedildi (kodeks).
+	for lo in run_state.loadouts.values():
+		if lo.current_form != null:
+			Meta.discover(CodexData.form_key(lo.current_form.id))
 	var map_rng := RandomNumberGenerator.new()
-	map_rng.randomize()
+	# Meydan okuma DETERMİNİSTİK: aynı seed -> aynı harita (async yarış). Değilse rastgele.
+	if challenge != "":
+		map_rng.seed = Meta.challenge_seed
+	else:
+		map_rng.randomize()
 	rm = RunManager.new(catalog, map_rng)
 	rm.battle_requested.connect(_on_battle_requested)
+	rm.choice_applied.connect(_on_choice_applied)
 	rm.choice_requested.connect(_on_choice_requested)
 	rm.route_requested.connect(_on_route_requested)
 	rm.room_resolved.connect(_on_room_resolved)
@@ -204,7 +218,26 @@ func _style_button(btn: Button, accent_color: Color = GameLook.TEAL, height: flo
 func _on_battle_requested(enemies: Array) -> void:
 	_clear_menu()
 	_clear_bodies()
+	for e in enemies:
+		Meta.discover(CodexData.enemy_key(e.display_name))   # kodeks: düşman keşfi
 	_start_battle(enemies)
+
+# CHOICE uygulandı: kazanılan içeriği kodekse işle (form/arketip/relik keşfi).
+func _on_choice_applied(opt) -> void:
+	match opt.kind:
+		ChoiceOption.Kind.ACQUIRE_RUNE:
+			var f = opt.params.get("form", null)
+			if f != null:
+				Meta.discover(CodexData.form_key(f.id))
+		ChoiceOption.Kind.RELIC:
+			var r = opt.params.get("relic", null)
+			if r != null:
+				Meta.discover(CodexData.relic_key(r.id))
+		ChoiceOption.Kind.ARCHETYPE:
+			var a = opt.params.get("archetype", null)
+			var lo := run_state.loadout(opt.params.get("char_id", ""))
+			if a != null and lo != null and lo.current_form != null:
+				Meta.discover(CodexData.arch_key(lo.current_form.id, a.id))
 
 # CHOICE düğümü: önce ORB BOARD (kazanılan orb'lar -> draft puanı), sonra kart
 # ekranı (puanla kart seç/reroll). Orb yoksa board atlanır, puan 0.
@@ -226,6 +259,7 @@ func _show_board() -> void:
 	add_child(_board)
 	_board.setup(run_state.orbs, Rect2(90, 640, 900, 1140))
 	run_state.orbs = 0   # board'a döküldü
+	_tutorial_hint("orb", Color(0.5, 0.9, 1.0))   # tutorial: orb board ilk kez
 
 func _on_board_finished(points: int) -> void:
 	_orbs = points
@@ -295,6 +329,16 @@ func _show_cards() -> void:
 	_style_button(re, Color(0.95, 0.7, 0.25), 78.0, 900.0, 28)
 	re.pressed.connect(_on_reroll)
 	skill_menu.add_child(re)
+
+	# Tutorial: kart seçimi ilk kez -> "bir kart seç"; build (arketip) düğümünde -> "yönünü belirle".
+	var has_archetype := false
+	for o in _pending_options:
+		if o.kind == ChoiceOption.Kind.ARCHETYPE:
+			has_archetype = true
+	if has_archetype:
+		_tutorial_hint("build", Color(1.0, 0.55, 0.35))
+	else:
+		_tutorial_hint("cards", Color(0.9, 0.8, 0.4))
 
 # Seçenek türüne göre çerçeve rengi (mor=dönüşüm, altın=buff, yeşil=iyileş, turuncu=can).
 func _choice_color(opt: ChoiceOption) -> Color:
@@ -409,6 +453,20 @@ func _flash(msg: String, col: Color, secs := 2.2) -> void:
 	_flash_label.visible = true
 	_flash_time = secs
 
+# Tutorial (ilk 5 bölüm) bağlamsal ipucu — DENEYEREK ÖĞREN: durdurmadan akıp giden tek
+# satır, ömür boyu bir kez (Meta.seen_hints). Yalnız normal campaign tutorial bölümlerinde;
+# endless/challenge modda sessiz. bkz Tutorial.hint + Meta.has_seen_hint.
+func _tutorial_hint(key: String, col := Color(1.0, 0.95, 0.6), secs := 2.8) -> void:
+	if run_state == null or run_state.endless or Meta.challenge_mode != "":
+		return
+	if not Tutorial.is_tutorial(Meta.selected_level) or Meta.has_seen_hint(key):
+		return
+	var txt := Tutorial.hint(key)
+	if txt == "":
+		return
+	Meta.mark_hint_seen(key)
+	_flash(txt, col, secs)
+
 func _on_run_ended(won: bool) -> void:
 	tm = null
 	_clear_menu()
@@ -422,18 +480,32 @@ func _on_run_ended(won: bool) -> void:
 		if run_state.depth > Meta.endless_best_depth:
 			Meta.endless_best_depth = run_state.depth
 			Meta.save_game()
-	elif won:
-		# Ödülü Meta'ya yaz + seviyeyi aç (sonraki kilidi açılır).
+	elif won and Meta.challenge_mode == "":
+		# Ödülü Meta'ya yaz + seviyeyi aç (sonraki kilidi açılır). Meydan okuma seviye AÇMAZ.
 		cry = RunContent.reward_crystal(lvl)
 		Meta.add_gold(run_state.gold)
 		Meta.add_crystal(cry)
 		Meta.clear_level(lvl)
-	# RUN-END SUMMARY: run kapanış katmanı (savaş sonu değil). Kurulan build + ödül.
-	_show_run_summary(won, cry)
+	elif won:
+		# Meydan okuma zaferi: altın verilir ama seviye ilerlemesi/kristal yok (ayrı mod).
+		Meta.add_gold(run_state.gold)
+	# Run PUANI: normal -> best_score; meydan okuma -> seed başına tablo (async yarış).
+	var score := RunScore.compute(run_state, won)
+	var mode := Meta.challenge_mode
+	if mode != "":
+		Meta.record_challenge_score(mode, Meta.challenge_seed, score)
+	else:
+		Meta.record_score(score)
+	# RUN-END SUMMARY: run kapanış katmanı (savaş sonu değil). Kurulan build + ödül + puan.
+	_show_run_summary(won, cry, score, mode)
+	Meta.challenge_mode = ""   # geçici taşıyıcıyı temizle (sonraki run normal olsun)
 
-# Run sonu özet paneli: başlık + kurulan build (form + arketip + relik) + ödül + eve.
-func _show_run_summary(won: bool, cry: int) -> void:
-	if run_state.endless:
+# Run sonu özet paneli: başlık + kurulan build (form + arketip + relik) + ödül + puan + eve.
+func _show_run_summary(won: bool, cry: int, score: int = 0, mode: String = "") -> void:
+	if mode != "":
+		status_label.text = "%s %s" % [Challenge.mode_label(mode), "✓" if won else "✗"]
+		status_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
+	elif run_state.endless:
 		status_label.text = "♾ %d KAT İLERLEDİN" % run_state.depth
 		status_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
 	else:
@@ -469,6 +541,13 @@ func _show_run_summary(won: bool, cry: int) -> void:
 		_summary_label("KAZANILAN:  +%d💰   +%d💎" % [run_state.gold, cry], 30, Color(0.5, 0.9, 0.6))
 	else:
 		_summary_label("Buraya kadar: %s" % _progress_text(), 26, Color(0.8, 0.8, 0.85))
+
+	# PUAN + rekor (meydan okumada seed tablosu, değilse global best).
+	var best := Meta.challenge_best(mode, Meta.challenge_seed) if mode != "" else Meta.best_score
+	_summary_label("★ PUAN:  %d   (rekor: %d)" % [score, best], 32, Color(1.0, 0.9, 0.4))
+	# Async sosyal (STUB): sunucusuz percentile — "oyuncuların %N'ini geçtin".
+	if mode != "":
+		_summary_label("🌍 Oyuncuların %%%d'ini geçtin" % Challenge.percentile(score), 26, Color(0.55, 0.85, 0.95))
 
 	# Ana ekrana dönüş.
 	var home_btn := Button.new()
@@ -739,6 +818,9 @@ func _build_skill_menu(actor: Combatant) -> void:
 		_style_button(btn, accent, 94.0)
 		btn.pressed.connect(_on_skill_chosen.bind(s))
 		skill_menu.add_child(btn)
+		# Tutorial: ultimate şarjı ilk kez dolunca bir kez "hazır" ipucu.
+		if s.requires_charge and actor.is_charged():
+			_tutorial_hint("charge", Color(1.0, 0.85, 0.25))
 
 # Beceriyi tek bir büyük sembole indir (isim kimse bilmesin diye görsel ipucu).
 func _skill_icon(s: Skill) -> String:
@@ -818,11 +900,25 @@ func _on_input_requested(sequence: InputSequence) -> void:
 	if run_state.endless:
 		adaptive = maxf(adaptive, 1.0 + float(run_state.depth) * ENDLESS_RHYTHM_RAMP)
 	var speed_scale := wave_scale * adaptive
-	_rhythm.setup(_combo_length(), Rect2(90, ry_y, 900, 560), speed_scale)
+	var combo_len := _combo_length()
+	# TUTORIAL RİTİM FLOOR: ilk 5 bölüm — kombo kısa + hız yavaş tavanla (yalnız kolaylaştırır).
+	# L1 tek yavaş nota dev pencereyle -> oyuncu "çizgide DOKUN"u kendi dener.
+	if Tutorial.is_tutorial(Meta.selected_level) and not run_state.endless and Meta.challenge_mode == "":
+		var caps := Tutorial.rhythm_caps(Meta.selected_level, run_state.node_index)
+		combo_len = mini(combo_len, int(caps["combo_len"]))
+		speed_scale = minf(speed_scale, float(caps["speed_cap"]))
+	# Bağlamsal ipuçları (bir kez): ritim akışı + swipe yönü (L2+).
+	_tutorial_hint("rhythm")
+	if Meta.selected_level >= 1:
+		_tutorial_hint("swipe")
+	_rhythm.setup(combo_len, Rect2(90, ry_y, 900, 560), speed_scale)
 
 # Tutturulan her tile bir "vuruş": caster'dan hedefe escalating fireball + hasar sayısı.
 # Finisher (son tile) en büyük ölçek + ult pozu + en büyük sayı. fraction<=0 -> ıska (FX yok).
-func _on_tile_resolved(index: int, total: int, _result: int, is_finisher: bool, fraction: float) -> void:
+func _on_tile_resolved(index: int, total: int, result: int, is_finisher: bool, fraction: float) -> void:
+	# Tutorial: ilk MÜKEMMEL isabette "tam zamanında = daha çok hasar" ipucunu bir kez ver.
+	if result == InputEvaluator.Result.PERFECT:
+		_tutorial_hint("perfect", Color(0.4, 1.0, 0.55))
 	if fraction <= 0.0 or tm == null or _combo_target == null or not _combo_target.is_alive():
 		return
 	var caster := tm.active

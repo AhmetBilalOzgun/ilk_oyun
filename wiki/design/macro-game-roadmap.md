@@ -2,8 +2,8 @@
 type: design
 title: "Makro Oyun — Yol Haritası"
 created: 2026-09-15
-updated: 2026-09-15
-verified: 2026-09-15
+updated: 2026-09-16
+verified: 2026-09-16
 tags:
   - design
   - macro
@@ -25,6 +25,15 @@ code_anchors:
   - repo: game
     symbol: ChoiceGenerator
     file: scripts/rpg/run/choice_generator.gd
+  - repo: game
+    symbol: RunScore
+    file: scripts/rpg/run/run_score.gd
+  - repo: game
+    symbol: Challenge
+    file: scripts/meta/challenge.gd
+  - repo: game
+    symbol: CodexData
+    file: scripts/meta/codex_data.gd
 ---
 
 # Makro Oyun — Yol Haritası
@@ -45,7 +54,7 @@ Kaynak: kullanıcının "Makro Oyun — Tasarım Önerileri" dokümanı + 2026-0
 2. **İçerik cadence:** her 3-5 bölümde bir build-değişim node'u; kalan bölümler stat meta (emniyet ağı korunur).
 3. **Endless adaptive override:** Endless mode'da ritim-kombo **sürekli hızlanır** (adaptive yavaşlatma override edilir). Campaign'de adaptive ritim aynen kalır. ✅ **TAMAM (2026-09-15)** — `RunState.endless`/`depth`; `battle._on_input_requested` `maxf(adaptive, 1+depth·ENDLESS_RHYTHM_RAMP)`. → [[Turn-Based Savaş ve QTE]]
 4. **Node map / route choice** ✅ **TAMAM (2026-09-15)** — StS sütun DAG'ı: `RunMap` (sütun/kenar kabı), `RunNode.next` kenarları, `RunManager` AWAITING_ROUTE+`choose`; `RunContent.campaign_map`; `battle.gd` harita ekranı (dallanma önden görülür). HEAL/TREASURE oda türleri eklendi. (İlk karar "ertelendi"ydi; kullanıcı çekti.)
-5. **Sıralama:** run-end summary erkene (yakın vade). **Orb push-your-luck ERTELENDİ.**
+5. **Sıralama:** run-end summary erkene (yakın vade). **Orb push-your-luck KALICI İPTAL (2026-09-16, kullanıcı kararı) — yapılmayacak.**
 
 ## Yakın Vade Task Listesi (öncelik sırası)
 
@@ -53,8 +62,8 @@ Kaynak: kullanıcının "Makro Oyun — Tasarım Önerileri" dokümanı + 2026-0
    - Yeni `Archetype` = build katmanı; `RunState.relic_set()` arketip efektlerini RelicSet'e ekler (motor mevcut hook'la okur).
    - `ChoiceOption.Kind.ARCHETYPE` + `ChoiceGenerator._archetype_candidates`; `generate()` dönüşüm slotunu garanti eder.
    - Ember havuzu: Alev Yükü / Öldürücü Ritim / Zincir Patlama. Tek yeni hook `on_kill_aoe`. 189 test.
-2. **Run-end summary ekranı** ✅ **TAMAM (2026-09-15)** — `battle._show_run_summary`: başlık + build kimliği (form + arketip) + relikler + kazanılan değer. Numeric score + best + discovery ERTELENDİ (skor formülü/discovery faz-2).
-3. **Elite battle (risk/reward)** ✅ **TAMAM (2026-09-15)** — `RunNode.Type.ELITE` (boss'tan önce, i>=3), daha güçlü düşman (HP×1.7/DMG×1.3) + çift orb (`ELITE_ORB_MULT`). "Build'i sınayan özel kural" (hızlı ritim/direnç) ERTELENDİ.
+2. **Run-end summary ekranı** ✅ **TAMAM (2026-09-15)** — `battle._show_run_summary`: başlık + build kimliği (form + arketip) + relikler + kazanılan değer. **Numeric score + best ✅ TAMAM (2026-09-16)** — `RunScore.compute` (saf: düğüm/kat + relik + arketip + elit/boss + zafer), `Meta.best_score`/`record_score`, özet panelde "★ PUAN … (rekor …)".
+3. **Elite battle (risk/reward)** ✅ **TAMAM (2026-09-15)** — `RunNode.Type.ELITE` (boss'tan önce, i>=3), daha güçlü düşman (HP×1.7/DMG×1.3) + çift orb (`ELITE_ORB_MULT`). Elit "build'i sınayan özel kural" (hızlı ritim/direnç) **KALICI İPTAL (2026-09-16, kullanıcı kararı) — yapılmayacak.** Elit farkı HP/DMG/orb ölçeği olarak kalır.
 4. **Content cadence wiring** ✅ **TAMAM (2026-09-15)** — `RunContent.is_build_level(i)` (i=3,7,11,15,19); `RunState.allow_archetypes` gate; arketip yalnız build-bölümlerinde, relic/dönüşüm her zaman.
 5. **(Endless fazında)** adaptive-ritim override — sürekli hızlanan kombo. ✅ **TAMAM (2026-09-15)** — gerçek endless mode kuruldu (bkz aşağı).
 
@@ -62,9 +71,13 @@ Kaynak: kullanıcının "Makro Oyun — Tasarım Önerileri" dokümanı + 2026-0
 
 ## Sonraki Fazlar (doküman §16)
 
-- **Faz 2 — Build Meta:** Plazma arketip havuzu, discovery sistemi, codex/spellbook, character vs build progression ayrımı. **(Karakter progression erken başladı: [[Mastery / Battle-Pass]] — arketipler mastery track'iyle açılıyor, 2026-09-15.)**
-- **Faz 3 — Long-Term:** Endless mode, leaderboard, geniş içerik havuzu.
-- **Faz 4 — Live/Competitive:** Daily challenge, weekly seed, async sosyal ("oyuncuların %82'sini geçtin").
+- **Faz 2 — Build Meta:**
+  - **Plazma arketip havuzu ✅ TAMAM** — `RunContent.plasma_archetypes()` (Kör Eden / Kritik / Patlayıcı Plazma), `skill_catalog`'a register, Ember→Plazma dönüşümü kablolu (wiki daha önce yanlışlıkla "başlamadı" diyordu, düzeltildi 2026-09-16).
+  - **Discovery sistemi ✅ TAMAM (2026-09-16)** — `Meta.discovered` + `Meta.discover(key)`; battle hook'ları form/arketip/relik/düşman ilk karşılaşmada işler. Anahtarlar `CodexData` (RunContent türevi).
+  - **Codex/spellbook ✅ TAMAM (2026-09-16)** — `scenes/codex.tscn` + `scripts/codex.gd`: keşfedilen=isim+açıklama, keşfedilmemiş=🔒 ???, "KEŞİF n/total". Home'da "📖 KODEKS" girişi.
+  - character vs build progression ayrımı: karakter progression erken başladı: [[Mastery / Battle-Pass]] — arketipler mastery track'iyle açılıyor, 2026-09-15.
+- **Faz 3 — Long-Term:** Endless mode ✅ (2026-09-15). Leaderboard + geniş içerik havuzu açık (leaderboard'un yerel async stub'ı Faz 4'te kuruldu).
+- **Faz 4 — Live/Competitive ✅ TAMAM (2026-09-16, sunucusuz MVP):** Günlük/haftalık meydan okuma (`Challenge.daily_seed`/`weekly_seed` — tarihten deterministik seed, aynı gün herkes aynı harita) + async sosyal STUB (`Challenge.percentile` lojistik eğri → "oyuncuların %N'ini geçtin"). Skorlar `Meta.daily_best`/`weekly_best`. **Gerçek sunucu leaderboard'u hâlâ açık** — percentile() sunucu gelince gerçek dağılımla değişir, çağrı yerleri sabit.
 
 ## Tasarım İlkeleri (korunacak)
 

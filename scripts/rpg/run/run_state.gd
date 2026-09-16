@@ -11,6 +11,9 @@ var gold: int = 0
 var orbs: int = 0               # yenilen düşman başına 1 (CHOICE'ta fizik board'a dökülür)
 var relics: Array = []          # Array[Relic] — run boyu aktif kural kartları
 var node_index: int = 0
+var battles_won: int = 0            # yenilen normal savaş sayısı (RunScore için)
+var elites_won: int = 0             # yenilen ELİT savaş sayısı (RunScore için)
+var bosses_won: int = 0             # yenilen BOSS sayısı (RunScore için)
 var endless: bool = false           # endless mode: harita sonsuz uzar (boss yok), ritim
                                     # sürekli hızlanır (adaptive override; bkz battle.gd)
 var depth: int = 0                  # temizlenen oda sayısı (endless zorluk + ritim ramp)
