@@ -1,148 +1,117 @@
 extends Control
 
-# Ana ekran (home). Para çubuğu (Altın/Kristal) + OYNA (seviye seçimi) +
-# KARAKTERLER + KRİSTAL->ALTIN çevir + ÇIKIŞ. Meta autoload'u paylaşır.
-# KRİSTAL AL = IAP stub (gerçek-para yerine test amaçlı +5 kristal).
-
 const LEVEL_SELECT := "res://scenes/level_select.tscn"
 const CHARACTERS := "res://scenes/characters.tscn"
-
+const BATTLE := "res://scenes/battle.tscn"
 var _currency: Label
+var _mastery: VBoxContainer
 
 func _ready() -> void:
-	var bg := ColorRect.new()
-	bg.color = Color(0.11, 0.1, 0.15, 1)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
-
-	_currency = _label("", 44, Vector2(60, 60))
+	GameLook.background(self)
+	GameLook.card(self, Rect2(56, 52, 968, 100))
+	_currency = GameLook.label("", 32)
+	_currency.position = Vector2(88, 80)
 	add_child(_currency)
 	_refresh_currency()
-
-	# İlk açılış: büyücü seçilmemişse varsayılan olarak ilkini seç (kalıcı).
 	if Meta.selected_character == "":
 		Meta.select_character(RunContent.party()[0].id)
-
-	var title := _label("RÜN BÜYÜCÜSÜ", 72, Vector2(60, 240))
-	title.add_theme_color_override("font_color", Color(0.99, 0.85, 0.4))
+	var title := GameLook.label("RÜN\nBÜYÜCÜSÜ", 88)
+	title.position = Vector2(80, 220)
+	title.size.x = 920
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(title)
-
-	var active := RunContent.character_by_id(Meta.selected_character)
-	var who := _label("Büyücü: %s (%s)" % [active.display_name, ", ".join(active.element_pair)], 40, Vector2(60, 360))
-	who.add_theme_color_override("font_color", Color(0.6, 0.85, 1.0))
-	add_child(who)
-
-	_build_mastery_bar()
-
+	var subtitle := GameLook.label("Küçük bir büyücü. Kocaman bir macera.", 30)
+	subtitle.position = Vector2(80, 448)
+	subtitle.size.x = 920
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(subtitle)
+	var hero := AnimatedSprite2D.new()
+	hero.sprite_frames = GameLook.frames("fire")
+	hero.position = Vector2(540, 760)
+	hero.scale = Vector2.ONE * 1.7
+	add_child(hero)
+	hero.play("idle")
 	var box := VBoxContainer.new()
-	box.position = Vector2(180, 560)
-	box.add_theme_constant_override("separation", 40)
+	box.position = Vector2(170, 1010)
+	box.add_theme_constant_override("separation", 20)
 	add_child(box)
+	box.add_child(_button("MACERAYA BAŞLA", _on_play, 120))
+	box.add_child(_button("SONSUZ YOLCULUK  ·  Rekor %d" % Meta.endless_best_depth, _on_endless))
+	box.add_child(_button("BÜYÜCÜ & EKİPMAN", _on_characters))
+	GameLook.card(self, Rect2(100, 1410, 880, 280))
+	_mastery = VBoxContainer.new()
+	_mastery.position = Vector2(130, 1435)
+	_mastery.size.x = 820
+	_mastery.add_theme_constant_override("separation", 12)
+	add_child(_mastery)
+	_build_mastery_bar()
+	var exchange :=  _button("1 KRİSTAL → 100 ALTIN", _on_convert, 70)
+	exchange.position = Vector2(170, 1730)
+	add_child(exchange)
+	var utility := HBoxContainer.new()
+	utility.position = Vector2(170, 1830)
+	utility.add_theme_constant_override("separation", 20)
+	add_child(utility)
+	var crystal := _button("KRİSTAL AL (TEST)", _on_buy_crystal, 60)
+	crystal.custom_minimum_size.x = 480
+	GameLook.button(crystal, GameLook.TEAL, 24)
+	utility.add_child(crystal)
+	var leave := _button("ÇIKIŞ", func(): get_tree().quit(), 60)
+	leave.custom_minimum_size.x = 240
+	GameLook.button(leave, GameLook.TEAL, 24)
+	utility.add_child(leave)
 
-	box.add_child(_button("OYNA", _on_play))
-	var endless_txt := "♾ ENDLESS"
-	if Meta.endless_best_depth > 0:
-		endless_txt += "  (en iyi: %d kat)" % Meta.endless_best_depth
-	box.add_child(_button(endless_txt, _on_endless))
-	box.add_child(_button("KARAKTERLER", _on_characters))
-	box.add_child(_button("KRİSTAL → ALTIN", _on_convert))
-	box.add_child(_button("KRİSTAL AL (test +5)", _on_buy_crystal))
-	box.add_child(_button("ÇIKIŞ", func(): get_tree().quit()))
-
-func _refresh_currency() -> void:
-	_currency.text = "💰 Altın: %d      💎 Kristal: %d" % [Meta.gold, Meta.crystal]
-
-# Battle-pass mastery çubuğu: oynadıkça dolar; dolunca sıradaki ödül açılır.
 func _build_mastery_bar() -> void:
-	var group := Control.new()
-	group.name = "MasteryGroup"
-	group.set_anchors_preset(Control.PRESET_FULL_RECT)
-	group.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(group)
-
-	var m: int = Meta.mastery
-	var nxt: int = MasteryTrack.next_need(m)
-	var prev: int = MasteryTrack.prev_need(m)
-	var frac: float = 1.0 if nxt < 0 else float(m - prev) / float(max(1, nxt - prev))
-	var done: int = Meta.claimed_tiers
-	var total: int = MasteryTrack.tier_count()
-
-	var head := _label("🎖 MASTERY  %d/%d" % [done, total], 36, Vector2(60, 440))
-	head.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
-	group.add_child(head)
-
+	for child in _mastery.get_children():
+		_mastery.remove_child(child)
+		child.queue_free()
+	_mastery.add_child(GameLook.label("USTALIK YOLU  ·  %d / %d" % [Meta.claimed_tiers, MasteryTrack.tier_count()], 30))
+	var nxt := MasteryTrack.next_need(Meta.mastery)
+	var prev := MasteryTrack.prev_need(Meta.mastery)
 	var bar := ProgressBar.new()
-	bar.position = Vector2(60, 476)
-	bar.custom_minimum_size = Vector2(840, 30)
-	bar.min_value = 0.0
-	bar.max_value = 1.0
-	bar.value = frac
+	bar.custom_minimum_size = Vector2(820, 28)
+	bar.max_value = 1
+	bar.value = 1.0 if nxt < 0 else float(Meta.mastery - prev) / maxi(1, nxt - prev)
 	bar.show_percentage = false
-	group.add_child(bar)
-
-	var nxt_text: String = "Tüm ödüller açıldı 🎉" if nxt < 0 else \
-		"Sıradaki: %s  (%d / %d)" % [MasteryTrack.next_label(m), m, nxt]
-	var sub := _label(nxt_text, 30, Vector2(60, 512))
-	sub.add_theme_color_override("font_color", Color(0.8, 0.85, 0.95))
-	group.add_child(sub)
-
-	# Hak edilmiş ödül varsa: elle TOPLA butonu (aç -> topla dopamin anı). Her basış 1 tier.
+	bar.add_theme_stylebox_override("background", GameLook.panel(Color("dde6d4"), Color("a1b9a3")))
+	bar.add_theme_stylebox_override("fill", GameLook.panel(GameLook.TEAL, GameLook.TEAL))
+	_mastery.add_child(bar)
+	var hint := "Tüm ödüller açıldı!" if nxt < 0 else "%s  ·  %d / %d" % [MasteryTrack.next_label(Meta.mastery), Meta.mastery, nxt]
+	_mastery.add_child(GameLook.label(hint, 26))
 	if Meta.claimable_count() > 0:
-		var claim := Button.new()
-		claim.text = "🎁 TOPLA (%d)" % Meta.claimable_count()
-		claim.position = Vector2(920, 470)
-		claim.custom_minimum_size = Vector2(280, 60)
-		claim.add_theme_font_override("font", PIXEL_FONT)
-		claim.add_theme_font_size_override("font_size", 30)
-		claim.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
-		claim.pressed.connect(_on_claim)
-		claim.name = "ClaimButton"
-		group.add_child(claim)
-		# Dikkat çeksin: nabız.
-		var tw := create_tween().set_loops()
-		tw.tween_property(claim, "modulate", Color(1.4, 1.2, 0.6, 1.0), 0.6).set_trans(Tween.TRANS_SINE)
-		tw.tween_property(claim, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.6).set_trans(Tween.TRANS_SINE)
+		var claim := _button("ÖDÜLÜ TOPLA (%d)" % Meta.claimable_count(), _on_claim, 64)
+		claim.custom_minimum_size.x = 820
+		_mastery.add_child(claim)
 
-# TOPLA: sıradaki tier ödülünü uygula + gösterisi. Sonra mastery barı + parayı tazele.
 func _on_claim() -> void:
 	var reward := Meta.claim_next()
 	if reward.is_empty():
 		return
-	_show_reward_popup(String(reward.get("label", "Ödül")))
-	_rebuild_mastery()
-	_refresh_currency()
-
-# Mevcut mastery UI elemanlarını (bar/başlık/alt/TOPLA) kaldırıp yeniden çiz.
-func _rebuild_mastery() -> void:
-	for n in get_children():
-		if n is Control and n.name == "MasteryGroup":
-			n.queue_free()
 	_build_mastery_bar()
+	_refresh_currency()
+	var popup := AcceptDialog.new()
+	popup.title = "Yeni ödül!"
+	popup.dialog_text = String(reward.get("label", "Ödül"))
+	popup.confirmed.connect(popup.queue_free)
+	popup.canceled.connect(popup.queue_free)
+	add_child(popup)
+	popup.popup_centered(Vector2i(650, 220))
 
-# Ödül gösterisi: ekran ortasında büyük kart, ~1.6s sonra söner.
-func _show_reward_popup(label: String) -> void:
-	var panel := ColorRect.new()
-	panel.color = Color(0.06, 0.05, 0.12, 0.92)
-	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(panel)
-	var l := _label("🎁 AÇILDI\n\n%s" % label, 64, Vector2(0, 700))
-	l.size = Vector2(get_viewport_rect().size.x, 400)
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.add_theme_color_override("font_color", Color(1.0, 0.9, 0.45))
-	panel.add_child(l)
-	var tw := create_tween()
-	tw.tween_interval(1.4)
-	tw.tween_property(panel, "modulate:a", 0.0, 0.35)
-	tw.tween_callback(panel.queue_free)
+func _refresh_currency() -> void:
+	_currency.text = "ALTIN  %d                         KRİSTAL  %d" % [Meta.gold, Meta.crystal]
 
-const BATTLE := "res://scenes/battle.tscn"
+func _button(text: String, cb: Callable, height := 92) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(740, height)
+	GameLook.button(b)
+	b.pressed.connect(cb)
+	return b
 
 func _on_play() -> void:
 	Meta.endless_run = false
 	get_tree().change_scene_to_file(LEVEL_SELECT)
 
-# Endless: seviye seçmeden doğrudan sonsuz run'a gir (ritim sürekli hızlanır).
 func _on_endless() -> void:
 	Meta.endless_run = true
 	get_tree().change_scene_to_file(BATTLE)
@@ -155,26 +124,5 @@ func _on_convert() -> void:
 		_refresh_currency()
 
 func _on_buy_crystal() -> void:
-	Meta.add_crystal(5)   # IAP stub
+	Meta.add_crystal(5)  # Existing IAP test stub; no purchase performed.
 	_refresh_currency()
-
-const PIXEL_FONT = preload("res://assets/fonts/PixelifySans-Bold.ttf")
-
-func _label(text: String, fsize: int, pos: Vector2) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.position = pos
-	l.add_theme_font_override("font", PIXEL_FONT)
-	l.add_theme_font_size_override("font_size", int(round(fsize * 0.5)))
-	l.add_theme_constant_override("outline_size", 4)
-	l.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.08, 1.0))
-	return l
-
-func _button(text: String, cb: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(720, 110)
-	b.add_theme_font_override("font", PIXEL_FONT)
-	b.add_theme_font_size_override("font_size", 34)
-	b.pressed.connect(cb)
-	return b

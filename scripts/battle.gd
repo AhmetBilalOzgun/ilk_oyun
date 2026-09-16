@@ -63,7 +63,8 @@ var _combo_skill: Skill = null        # kombo becerisi (carrier/rune/pose)
 var _combo_pf := 0.0                  # "hepsi-PERFECT" nihai hasar (per-tile sayı payı)
 var _suppress_aggregate_fx := false   # kombo action'ında damage_resolved aggregate FX'i bastır
 
-const BATTLE_BG := preload("res://assets/battle_bg.png")
+var _background: Sprite2D
+var _world_index := 0
 const WIZARD_SCENE := preload("res://scenes/wizard.tscn")
 
 # Düşman sprite'ları (temiz atlas'a çevrilmiş referans). 3 set: dragon/goblin/dev.
@@ -74,10 +75,6 @@ const ENEMY_FRAMES := {
 }
 # Oyuncu büyücü sprite setleri — form kimliğine (sprite_key) göre seçilir.
 # Ember(Kor)=wizard_fire, Plazma=wizard_arcane. Form dönüşünce sprite komple değişir.
-const PLAYER_FRAMES := {
-	"wizard_fire": preload("res://assets/wizard/wizard_fire_frames.tres"),
-	"wizard_arcane": preload("res://assets/wizard/wizard_arcane_frames.tres"),
-}
 # Büyü efekt sprite'ları (SpellFX). carrier + rune_id ile seçilir.
 const FX_FIREBALL := preload("res://assets/wizard/fx_fireball.png")
 const FX_PLASMA_ORB := preload("res://assets/wizard/fx_plasma_orb.png")
@@ -120,33 +117,16 @@ const EFFECT_COLOR := {
 const C_NEUTRAL := Color(0.85, 0.85, 0.9, 1)
 
 func _ground_y() -> float:
-	var vp_h := maxf(1920.0, get_viewport_rect().size.y)
-	var bg_scale_y := vp_h / float(BATTLE_BG.get_height())
-	return 683.0 * bg_scale_y
+	return maxf(1920.0, get_viewport_rect().size.y) * float(GameLook.GROUND_RATIOS[_world_index])
 
 func _ready() -> void:
-	# Engine clear color'ı piksel temamıza eşle (gri alt bar tamamen engellenir)
-	RenderingServer.set_default_clear_color(Color(0.07, 0.06, 0.12, 1.0))
-
-	# Ekran yüksekliğini tam kaplayan zemin tabakası
-	var vp_h := maxf(1920.0, get_viewport_rect().size.y)
-	var bg_scale_y := vp_h / float(BATTLE_BG.get_height())
-
-	var bg_fill := ColorRect.new()
-	bg_fill.color = Color(0.08, 0.06, 0.14, 1.0)
-	bg_fill.size = Vector2(1080.0, vp_h + 800.0)
-	bg_fill.position = Vector2.ZERO
-	bg_fill.z_index = -20
-	add_child(bg_fill)
-
-	# Arka plan (her şeyin arkasında). Viewport yüksekliğine dinamik doldur (mor boşluk kalmaz).
-	var bg := Sprite2D.new()
-	bg.texture = BATTLE_BG
-	bg.centered = false
-	bg.position = Vector2.ZERO
-	bg.scale = Vector2(1080.0 / float(BATTLE_BG.get_width()), bg_scale_y)
-	bg.z_index = -10
-	add_child(bg)
+	RenderingServer.set_default_clear_color(Color("b9dce7"))
+	_world_index = GameLook.world_index(Meta.selected_level)
+	_background = Sprite2D.new()
+	_background.centered = false
+	_background.z_index = -10
+	add_child(_background)
+	_update_world()
 
 	# Run omurgasını kur. Meta CAN upgrade'i parti max HP'sine baklanır (run
 	# current_hp de buradan dolar). HASAR upgrade'i savaş başında becerilere eklenir.
@@ -181,7 +161,7 @@ func _ready() -> void:
 	add_child(skill_menu)
 
 	status_label = Label.new()
-	status_label.position = Vector2(40, 520)
+	status_label.position = Vector2(40, 160)
 	status_label.size = Vector2(1000, 50)
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_label.add_theme_font_override("font", PIXEL_FONT)
@@ -193,7 +173,7 @@ func _ready() -> void:
 
 	# Ekran ortasında büyük geçici flash (birleşim keşfi vb.). Başta gizli.
 	_flash_label = Label.new()
-	_flash_label.position = Vector2(40, 440)
+	_flash_label.position = Vector2(40, 245)
 	_flash_label.size = Vector2(1000, 60)
 	_flash_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_flash_label.add_theme_font_override("font", PIXEL_FONT)
@@ -212,65 +192,15 @@ func _ready() -> void:
 		else RunContent.campaign_map(Meta.selected_level, map_rng)
 	rm.start(run_map, run_state)
 
-func _style_button(btn: Button, accent_color: Color = Color(0.9, 0.75, 0.3), height: float = 78.0, width: float = 900.0, font_size: int = 30) -> void:
+func _update_world() -> void:
+	_background.texture = GameLook.backdrop(_world_index)
+	_background.scale = Vector2(get_viewport_rect().size.x / _background.texture.get_width(), maxf(1920, get_viewport_rect().size.y) / _background.texture.get_height())
+
+func _style_button(btn: Button, accent_color: Color = GameLook.TEAL, height: float = 78.0, width: float = 900.0, font_size: int = 30) -> void:
 	btn.custom_minimum_size = Vector2(width, height)
-	btn.add_theme_font_override("font", PIXEL_FONT)
-	btn.add_theme_font_size_override("font_size", font_size)
+	GameLook.button(btn, accent_color, font_size)
+	btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
-	var style_normal := StyleBoxFlat.new()
-	style_normal.bg_color = Color(0.08, 0.08, 0.16, 0.94)
-	style_normal.set_border_width_all(3)
-	style_normal.border_color = accent_color
-	style_normal.set_corner_radius_all(6)
-	style_normal.content_margin_left = 16
-	style_normal.content_margin_right = 16
-	style_normal.content_margin_top = 8
-	style_normal.content_margin_bottom = 8
-	btn.add_theme_stylebox_override("normal", style_normal)
-
-	var style_hover := StyleBoxFlat.new()
-	style_hover.bg_color = Color(0.14, 0.14, 0.28, 0.98)
-	style_hover.set_border_width_all(4)
-	style_hover.border_color = accent_color.lightened(0.2)
-	style_hover.set_corner_radius_all(6)
-	style_hover.content_margin_left = 16
-	style_hover.content_margin_right = 16
-	style_hover.content_margin_top = 8
-	style_hover.content_margin_bottom = 8
-	btn.add_theme_stylebox_override("hover", style_hover)
-
-	var style_pressed := StyleBoxFlat.new()
-	style_pressed.bg_color = Color(0.22, 0.18, 0.36, 1.0)
-	style_pressed.set_border_width_all(4)
-	style_pressed.border_color = accent_color.lightened(0.4)
-	style_pressed.set_corner_radius_all(6)
-	style_pressed.content_margin_left = 16
-	style_pressed.content_margin_right = 16
-	style_pressed.content_margin_top = 8
-	style_pressed.content_margin_bottom = 8
-	btn.add_theme_stylebox_override("pressed", style_pressed)
-
-	var style_disabled := StyleBoxFlat.new()
-	style_disabled.bg_color = Color(0.06, 0.06, 0.09, 0.75)
-	style_disabled.set_border_width_all(2)
-	style_disabled.border_color = Color(0.3, 0.3, 0.35, 0.8)
-	style_disabled.set_corner_radius_all(6)
-	style_disabled.content_margin_left = 16
-	style_disabled.content_margin_right = 16
-	style_disabled.content_margin_top = 8
-	style_disabled.content_margin_bottom = 8
-	btn.add_theme_stylebox_override("disabled", style_disabled)
-
-	btn.add_theme_color_override("font_color", Color(0.95, 0.96, 1.0))
-	btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
-	btn.add_theme_color_override("font_pressed_color", Color(1.0, 0.9, 0.4))
-	btn.add_theme_color_override("font_disabled_color", Color(0.5, 0.5, 0.55))
-
-# =========================================================================
-#  RUN omurgası olayları
-# =========================================================================
-
-# BATTLE/BOSS düğümü: verilen düşman setiyle yeni bir savaş kur.
 func _on_battle_requested(enemies: Array) -> void:
 	_clear_menu()
 	_clear_bodies()
@@ -398,7 +328,7 @@ func _archetype_badge(accent: Color) -> Control:
 
 # Mor parıltı nabzı (dönüşüm kartı öne çıksın).
 func _pulse_button(btn: Control) -> void:
-	var tw := create_tween().set_loops()
+	var tw := create_tween().bind_node(btn).set_loops()
 	tw.tween_property(btn, "modulate", Color(1.4, 1.1, 1.55, 1.0), 0.65).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(btn, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.65).set_trans(Tween.TRANS_SINE)
 
@@ -453,13 +383,11 @@ func _reveal_transform() -> void:
 	var form := _pending_form_reveal
 	_pending_form_reveal = null
 	_flash("✨ YENİ FORM: %s" % form.display_name, Color(1.0, 0.85, 0.25), 2.6)
-	var frames = PLAYER_FRAMES.get(form.sprite_key)
 	for c in _bodies:
 		var b: Dictionary = _bodies[c]
 		if b.get("is_party", false):
 			var spr: AnimatedSprite2D = b["sprite"]
-			if frames != null:
-				spr.sprite_frames = frames
+			spr.sprite_frames = _player_frames(c)
 			var reveal := "levelup" if spr.sprite_frames.has_animation("levelup") else "victory"
 			if spr.sprite_frames.has_animation(reveal):
 				spr.play(reveal)
@@ -468,20 +396,11 @@ func _reveal_transform() -> void:
 
 # Party combatant'ının güncel formuna göre sprite setini seç (fail-soft: fire).
 func _player_frames(c: Combatant) -> SpriteFrames:
-	var key := "wizard_fire"
 	var lo := run_state.loadout(c.source.id)
-	if lo != null and lo.current_form != null and PLAYER_FRAMES.has(lo.current_form.sprite_key):
-		key = lo.current_form.sprite_key
-	return PLAYER_FRAMES[key]
+	return GameLook.frames(GameLook.form_key(lo) if lo != null else "fire")
 
-# Commit edilen build arketipinin sprite rengi (dışlayıcı: en çok bir arketip). Yoksa
-# WHITE (nötr). _process her karede bunu büyücü modulate'ine uygular.
-func _party_tint(c: Combatant) -> Color:
-	var lo := run_state.loadout(c.source.id) if run_state != null else null
-	if lo != null:
-		for a in lo.archetypes:
-			return a.tint
-	return Color.WHITE
+func _party_tint(_c: Combatant) -> Color:
+	return Color.WHITE  # Each form now has its own authored palette and animation atlas.
 
 # Ekran-ortası geçici yazı (birkaç saniye). _process söndürür.
 func _flash(msg: String, col: Color, secs := 2.2) -> void:
@@ -714,6 +633,9 @@ func _advance_depth() -> void:
 # =========================================================================
 
 func _start_battle(enemies: Array) -> void:
+	if run_state.endless:
+		_world_index = floori(run_state.depth / 4.0) % 5
+		_update_world()
 	# Yeni savaş -> önceki savaşın erteleme/anim durumunu temizle.
 	_pending_end = false
 	_end_delay = 0.0
@@ -884,7 +806,7 @@ func _on_input_requested(sequence: InputSequence) -> void:
 	_rhythm.finished.connect(_on_rhythm_finished)
 	add_child(_rhythm)
 	# Can barlarının üstündeki gökyüzü bölgesinde konumlandır (y = ~600)
-	var ry_y := maxf(160.0, _ground_y() - 680.0)
+	var ry_y := maxf(220.0, _ground_y() - 870.0)
 	# Waveler (tur) geçtikçe piano tiles hızlanır. round_index 1'den başlar => ilk wave 1.0x.
 	var waves_passed: int = maxi(0, (tm.round_index if tm != null else 1) - 1)
 	var wave_scale := 1.0 + float(waves_passed) * RHYTHM_SPEEDUP_PER_WAVE
@@ -896,7 +818,7 @@ func _on_input_requested(sequence: InputSequence) -> void:
 	if run_state.endless:
 		adaptive = maxf(adaptive, 1.0 + float(run_state.depth) * ENDLESS_RHYTHM_RAMP)
 	var speed_scale := wave_scale * adaptive
-	_rhythm.setup(_combo_length(), Rect2(90, ry_y, 900, 320), speed_scale)
+	_rhythm.setup(_combo_length(), Rect2(90, ry_y, 900, 560), speed_scale)
 
 # Tutturulan her tile bir "vuruş": caster'dan hedefe escalating fireball + hasar sayısı.
 # Finisher (son tile) en büyük ölçek + ult pozu + en büyük sayı. fraction<=0 -> ıska (FX yok).
@@ -967,6 +889,12 @@ func _on_action_selected(skill: Skill, _target: Combatant) -> void:
 	_last_skill = skill
 
 func _on_damage_resolved(b: DamageBreakdown, attacker: Combatant, target: Combatant) -> void:
+	if b.missed:
+		status_label.text = "KÖR EDEN PLAZMA · DÜŞMAN ISKALADI!"
+		_play_enemy_anim(attacker, "attack")
+		_flash("ISKA!", Color("fff4b5"), 0.9)
+		_next_turn_delay = NEXT_TURN_PAUSE
+		return
 	status_label.text = "⚔️ %s ➔ %s : %d HASAR" % [
 		attacker.display_name().to_upper(), target.display_name().to_upper(), b.final_damage]
 	# Kombo action'ı: projectile/hasar sayısı per-tile'da gösterildi (bkz _on_tile_resolved).
@@ -1332,7 +1260,7 @@ func _build_bodies() -> void:
 			var spr := AnimatedSprite2D.new()
 			spr.sprite_frames = ENEMY_FRAMES[_enemy_sprite_key(c.source)]
 			spr.flip_h = true   # party'e dönük (sprite'lar ters yöne bakıyor)
-			spr.scale = Vector2(ENEMY_SCALE, ENEMY_SCALE)
+			spr.scale = Vector2.ONE * ENEMY_SCALE * (96.0 / spr.sprite_frames.get_frame_texture("idle", 0).get_width())
 			var eh: float = 96.0 * ENEMY_SCALE
 			var ex: float = 950.0 - idx * ENEMY_COL_GAP
 			var depth_y: float = float(idx % 2) * 44.0        # zig-zag derinlik
@@ -1371,7 +1299,7 @@ func _enemy_floats(src) -> bool:
 # Sonsuz yumuşak süzülme (uçan düşmanlar için).
 func _hover(spr: Node2D) -> void:
 	var base_y: float = spr.position.y
-	var tw := create_tween().set_loops()
+	var tw := create_tween().bind_node(spr).set_loops()
 	tw.tween_property(spr, "position:y", base_y - 26.0, 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_property(spr, "position:y", base_y, 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 

@@ -14,14 +14,17 @@ var _currency: Label
 var _detail: VBoxContainer
 
 func _ready() -> void:
+	var look := Theme.new()
+	look.set_color("font_color", "Label", GameLook.INK)
+	look.set_color("font_color", "Button", GameLook.INK)
+	look.set_stylebox("normal", "Button", GameLook.panel())
+	theme = look
 	_chars = RunContent.party()
 	for c in _chars:
 		_by_id[c.id] = c
 
-	var bg := ColorRect.new()
-	bg.color = Color(0.11, 0.1, 0.15, 1)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	GameLook.background(self, 1)
+	GameLook.card(self, Rect2(35, 300, 1010, 1360))
 
 	_currency = Label.new()
 	_currency.position = Vector2(60, 50)
@@ -39,13 +42,19 @@ func _ready() -> void:
 		b.custom_minimum_size = Vector2(300, 120)
 		b.add_theme_font_size_override("font_size", 44)
 		b.pressed.connect(_on_select.bind(c.id))
+		GameLook.button(b)
 		row.add_child(b)
 
 	# Detay paneli.
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(60, 330)
+	scroll.size = Vector2(960, 1290)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	add_child(scroll)
 	_detail = VBoxContainer.new()
-	_detail.position = Vector2(60, 340)
+	_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_detail.add_theme_constant_override("separation", 24)
-	add_child(_detail)
+	scroll.add_child(_detail)
 
 	var back := Button.new()
 	back.text = "← GERİ"
@@ -53,6 +62,7 @@ func _ready() -> void:
 	back.custom_minimum_size = Vector2(300, 110)
 	back.add_theme_font_size_override("font_size", 40)
 	back.pressed.connect(func(): get_tree().change_scene_to_file(HOME))
+	GameLook.button(back)
 	add_child(back)
 
 	_refresh_currency()
@@ -72,15 +82,16 @@ func _on_select(char_id: String) -> void:
 
 func _rebuild_detail() -> void:
 	for ch in _detail.get_children():
+		_detail.remove_child(ch)
 		ch.queue_free()
 	var c: Character = _by_id[_selected_id]
 	var max_hp: int = c.max_hp + Meta.hp_bonus(c.id)
 
 	var is_active: bool = Meta.selected_character == c.id
 	var title := "%s%s" % [c.display_name, "   ★ AKTİF" if is_active else ""]
-	_detail.add_child(_stat(title, 52, Color(0.99, 0.85, 0.4)))
+	_detail.add_child(_stat(title, 52, GameLook.CORAL.darkened(0.4)))
 	_detail.add_child(_stat("Element: %s" % ", ".join(c.element_pair), 34))
-	_detail.add_child(_stat(_kit_text(c.id), 30, Color(0.6, 0.85, 1.0)))
+	_detail.add_child(_stat(_kit_text(c.id), 30, GameLook.TEAL.darkened(0.35)))
 	_detail.add_child(_stat("Max Can: %d  (taban %d + bonus %d)" % [max_hp, c.max_hp, Meta.hp_bonus(c.id)], 34))
 	_detail.add_child(_stat("Hasar bonusu: +%d (flat)" % Meta.power_bonus(c.id), 34))
 	_detail.add_child(_stat("Hız: %d" % c.speed, 34))
@@ -92,13 +103,14 @@ func _rebuild_detail() -> void:
 	sel.add_theme_font_size_override("font_size", 36)
 	sel.disabled = is_active
 	sel.pressed.connect(_on_select_active)
+	GameLook.button(sel)
 	_detail.add_child(sel)
 
 	_detail.add_child(_upgrade_row("CAN", MetaProgress.Track.HP))
 	_detail.add_child(_upgrade_row("HASAR", MetaProgress.Track.POWER))
 
 	# Ekipman (kalıcı, tüm karakterlerce paylaşılan): al + tak.
-	_detail.add_child(_stat("— EKİPMAN —", 40, Color(0.99, 0.85, 0.4)))
+	_detail.add_child(_stat("— EKİPMAN —", 40, GameLook.CORAL.darkened(0.4)))
 	for e in Equipment.catalog():
 		_detail.add_child(_equipment_row(e))
 
@@ -119,6 +131,7 @@ func _equipment_row(e: Equipment) -> HBoxContainer:
 		b.text = "AL (%d 💰)" % e.cost
 		b.disabled = Meta.gold < e.cost
 		b.pressed.connect(_on_buy_equipment.bind(e.id, e.cost))
+	GameLook.button(b, GameLook.TEAL, 28)
 	h.add_child(b)
 	return h
 
@@ -169,6 +182,7 @@ func _upgrade_row(track_name: String, track: int) -> HBoxContainer:
 	b.add_theme_font_size_override("font_size", 36)
 	b.disabled = not Meta.can_afford(c.id, track)
 	b.pressed.connect(_on_upgrade.bind(track))
+	GameLook.button(b, GameLook.TEAL, 28)
 	h.add_child(b)
 	return h
 
@@ -177,9 +191,11 @@ func _on_upgrade(track: int) -> void:
 		_refresh_currency()
 		_rebuild_detail()
 
-func _stat(text: String, fsize: int, color: Color = Color(0.92, 0.92, 0.95)) -> Label:
+func _stat(text: String, fsize: int, color: Color = GameLook.INK) -> Label:
 	var l := Label.new()
 	l.text = text
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	l.add_theme_font_size_override("font_size", fsize)
 	l.add_theme_color_override("font_color", color)
 	return l

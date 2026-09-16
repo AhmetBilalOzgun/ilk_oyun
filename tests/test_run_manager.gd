@@ -87,7 +87,7 @@ static func _test_archetype_choice(t) -> void:
 	t.section("archetype_choice")
 	var cat := RunContent.catalog()
 	t.check(cat.archetypes_for("ember").size() == 3, "Ember 3 arketip (got %d)" % cat.archetypes_for("ember").size())
-	t.check(cat.archetypes_for("plasma").size() == 0, "Plazma arketipi henüz yok (sonra)")
+	t.check(cat.archetypes_for("plasma").size() == 3, "Plazma üç arketipi sunar")
 	var rs := RunState.new(RunContent.party(), RunContent.start_forms(cat))
 	var a = cat.archetypes_for("ember")[0]   # burn_build
 	ChoiceOption.new(ChoiceOption.Kind.ARCHETYPE, "x",

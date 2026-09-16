@@ -1,0 +1,13 @@
+[mcp_servers.godot]
+command = "npx"
+args = [
+    "-y",
+    "@coding-solo/godot-mcp",
+]
+
+[mcp_servers.godot.env]
+GODOT_PATH = "/Users/ahmetbilalozgun/Downloads/Godot.app/Contents/MacOS/Godot"
+
+[mcp_servers.godot-docs]
+command = "node"
+args = ["/Users/ahmetbilalozgun/.local/godot-docs-mcp/node_modules/@nuskey8/godot-docs-mcp/script/index.js"]

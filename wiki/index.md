@@ -1,8 +1,8 @@
 ---
 type: meta
 title: "Wiki Index"
-updated: 2026-09-07
-verified: 2026-09-07
+updated: 2026-09-16
+verified: 2026-09-16
 ---
 
 # Wiki Index
@@ -10,6 +10,8 @@ verified: 2026-09-07
 Master catalog. Update on every ingest.
 
 ## Design
+
+- [[Tatlış Büyücüler ve Açık Hava Görsel Dili]] — beş mekan, sekiz form, açık UI, büyük ritim işareti ve %35 kör etme
 
 - [[Design Index]]
 - [[Rün Büyücüsü — Konsept]] — genel konsept
@@ -44,7 +46,7 @@ _(empty — frameworks, patterns, ideas)_
 
 ## Questions
 
-_(empty — filed answers to queries)_
+- [[Kârlılık Analizi - 2026-09-15]] — kod ve belge incelemesi, pazar kaynakları, gelir senaryoları, bütçe ve doğrulama planı; PDF ve düzenlenebilir rapor
 
 ## Comms
 

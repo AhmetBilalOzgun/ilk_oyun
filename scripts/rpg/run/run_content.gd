@@ -68,7 +68,7 @@ static func catalog() -> SkillCatalog:
 	cat.add_transform("ember", "storm", "plasma")   # Ember + Storm -> Plazma
 	for r in relic_catalog():
 		cat.add_relic(r)
-	for a in ember_archetypes():
+	for a in ember_archetypes() + plasma_archetypes():
 		cat.add_archetype(a)
 	return cat
 
@@ -102,8 +102,8 @@ static func ember_archetypes() -> Array:
 				Relic.new("burn_build_dot", "", "", "dot_amp", 1.5),
 				Relic.new("burn_build_spread", "", "", "burn_spread", 0.0),
 			], "🔥", Color(1.25, 0.72, 0.55)),      # sıcak kızıl-turuncu
-		Archetype.new("execute_build", "İnfaz",
-			"Tek hedefe kilit: az canlıyı bitirir, verdiğin hasardan can çekersin.", "ember", "Nişancı", [
+		Archetype.new("execute_build", "Kritik",
+			"Tek hedefe kilit: az canlıyı bitirir, verdiğin hasardan can çekersin.", "ember", "Kritik", [
 				Relic.new("execute_build_exec", "", "", "execute", 2.5),
 				Relic.new("execute_build_leech", "", "", "lifesteal", 0.15),
 			], "🎯", Color(1.2, 1.05, 0.6)),        # keskin altın-sarı
@@ -112,6 +112,25 @@ static func ember_archetypes() -> Array:
 				Relic.new("explosion_build_splash", "", "", "basic_splash", 0.5),
 				Relic.new("explosion_build_aoe", "", "", "on_kill_aoe", 0.6),
 			], "💥", Color(1.3, 0.6, 0.45)),        # patlayıcı kor-kırmızı
+	]
+
+# Same mastery family IDs preserve existing saves and unlock both element variants.
+static func plasma_archetypes() -> Array:
+	return [
+		Archetype.new("burn_build", "Kör Eden Plazma",
+			"Düşman saldırıları %35 ihtimalle tamamen ıskalar.", "plasma", "Kör Eden", [
+				Relic.new("plasma_blind", "", "", "enemy_miss_chance", 0.35),
+			], "☀", Color.WHITE),
+		Archetype.new("execute_build", "Kritik Plazma",
+			"Az canlı hedefe 2.5 kat hasar; hasarın %15'i cana dönüşür.", "plasma", "Kritik", [
+				Relic.new("plasma_crit_exec", "", "", "execute", 2.5),
+				Relic.new("plasma_crit_leech", "", "", "lifesteal", 0.15),
+			], "✦", Color.WHITE),
+		Archetype.new("explosion_build", "Patlayıcı Plazma",
+			"Normal vuruşlar alana yayılır; ölen düşman zincir patlar.", "plasma", "Patlayıcı", [
+				Relic.new("plasma_splash", "", "", "basic_splash", 0.5),
+				Relic.new("plasma_boom", "", "", "on_kill_aoe", 0.6),
+			], "✹", Color.WHITE),
 	]
 
 # --- Karakter + başlangıç formu -----------------------------------------------

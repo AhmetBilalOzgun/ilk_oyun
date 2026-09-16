@@ -13,11 +13,11 @@ class_name MasteryTrack
 
 # Kümülatif mastery eşiği + o tier'ın ödülü. Sıra = açılış sırası.
 const TIERS := [
-	{"need": 40,   "type": "archetype", "value": "burn_build",      "label": "🔥 Alev build"},
+	{"need": 40,   "type": "archetype", "value": "burn_build",      "label": "Yakma / Kör Etme"},
 	{"need": 110,  "type": "equipment", "value": "ember_boots",     "label": "👢 Köz Çizme"},
-	{"need": 200,  "type": "archetype", "value": "execute_build",   "label": "🎯 İnfaz build"},
+	{"need": 200,  "type": "archetype", "value": "execute_build",   "label": "Kritik formlar"},
 	{"need": 320,  "type": "gold",      "value": 200,               "label": "💰 200 Altın"},
-	{"need": 470,  "type": "archetype", "value": "explosion_build", "label": "💥 Patlama build"},
+	{"need": 470,  "type": "archetype", "value": "explosion_build", "label": "Patlayıcı formlar"},
 	{"need": 650,  "type": "equipment", "value": "flame_armor",     "label": "🛡 Alev Zırhı"},
 	{"need": 900,  "type": "crystal",   "value": 5,                 "label": "💎 5 Kristal"},
 ]

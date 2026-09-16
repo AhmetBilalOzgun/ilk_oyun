@@ -42,9 +42,12 @@ var active: Combatant = null
 var pending_skill: Skill = null
 var pending_target: Combatant = null
 
+var combat_rng := RandomNumberGenerator.new()
+
 var last_breakdown: DamageBreakdown = null
 
 func _init(p_config: BattleConfig = null, p_relics: RelicSet = null) -> void:
+	combat_rng.randomize()
 	config = p_config if p_config != null else BattleConfig.new()
 	relics = p_relics if p_relics != null else RelicSet.new()
 
@@ -173,6 +176,20 @@ func _run_enemy_turn() -> void:
 
 func _apply_action(skill: Skill, target: Combatant, cast_bonus: float, quality: float) -> void:
 	state = State.RESOLVING
+	# One roll per enemy action, including AoE. A miss applies no damage, status,
+	# charge, reflection or splash. Player rhythm MISS remains fail-soft.
+	if active.side == Combatant.Side.ENEMY and target.side == Combatant.Side.PARTY:
+		var chance := clampf(relics.amount("enemy_miss_chance", 0.0), 0.0, 1.0)
+		if chance > 0.0 and combat_rng.randf() < chance:
+			var miss := DamageBreakdown.new()
+			miss.base = skill.base_damage
+			miss.missed = true
+			last_breakdown = miss
+			if skill.requires_charge:
+				active.consume_charge()
+			state = State.NEXT_TURN
+			damage_resolved.emit(miss, active, target)
+			return
 	# Relic: Storm sonrası güçlenme (post_storm_amp) — aktörde biriken buff'ı uygula.
 	var extra := 1.0
 	if active.pending_amp > 1.0:

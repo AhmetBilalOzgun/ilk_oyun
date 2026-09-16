@@ -1,18 +1,9 @@
 extends Node2D
 class_name RhythmMinigame
 
-# Büyü KOMBO ritim minigame'i (Piano Tiles / Retro Gesture Tiles).
-# Beceri seçilince açılır: RASTGELE bir jest dizisi (5 yön: DOKUN ● / KAYDIR ◀ ▶ ▲ ▼)
-# sağdan sola kayar. Tile hedef çizgiye gelince oyuncu DOĞRU jesti yapar:
-#   yön yanlış / ıska -> KOMBO KIRILIR (kalan tile'lar düşer, sıra rakibe geçer).
-#   doğru yön + ±0.11s -> MÜKEMMEL (haptik titreşim), ±0.26s -> HARİKA.
-# Her tutturulan tile bir "vuruş"tur: host (battle.gd) o an bir büyü + hasar sayısı
-# gösterir. SON tile FINISHER'dır — en ağır (en büyük hasar) vuruş.
-#
-# Dizi HER CAST'te rastgele üretilir (sabit değil); uzunluk (combo_len) host'tan gelir
-# (run ilerledikçe uzar). Motor ritmi/jesti GÖRMEZ — kombo başarısı tek bir combo_score'a
-# (0..1) indirgenir; host bunu float çarpana çevirip TurnManager.submit_input_multiplier'a
-# verir (fail-soft: floor taban hasarı garanti). Görsel-motor sözleşmesi için bkz battle.gd.
+# Sıradaki jest ortada büyük: soluktan belirgine geçer. Halka kapanınca hareket et.
+# Altındaki küçük işaretler yalnız önizleme; girdi daima büyük işarete uygulanır.
+# Motor sözleşmesi aynı: tile_resolved + finished, fail-soft kombo skoru.
 
 # Her tile çözülünce (index, toplam, InputEvaluator.Result, finisher mi, hasar payı 0..1).
 signal tile_resolved(index, total, result, is_finisher, fraction)
@@ -56,6 +47,10 @@ var _broke := false
 var _sum_w := 1.0             # toplam ağırlık (fraction normalizasyonu)
 var _hint: Label
 var _ring: Node2D
+var _phase := 0.0
+var _current := -1
+var _revealed_at := 0.0
+var _timing_label: Label
 
 var _touch_start_pos := Vector2.ZERO
 var _touch_active := false
@@ -76,99 +71,40 @@ func setup(combo_len: int, rect: Rect2, speed_scale: float = 1.0) -> void:
 		_steps.append(STEP_POOL[randi() % STEP_POOL.size()])
 	# Ağırlık toplamı: (n-1) normal + finisher.
 	_sum_w = float(maxi(0, n - 1)) * 1.0 + FINISHER_WEIGHT
-	_hit_x = rect.position.x + 160.0
-	_track_y = rect.position.y + rect.size.y * 0.5
+	_hit_x = rect.get_center().x
+	_track_y = rect.position.y + rect.size.y * 0.43
 	_lead = 0.72
 	_spawn_x = _hit_x + _lead * _speed
 	_build_frame()
 	_build_notes()
+	_update_hint()
+	_process(0.0)
 
 # --- Kurulum ---
 
 func _build_frame() -> void:
-	# Ana panel (Pixel fantezi koyu arka plan)
-	var panel := ColorRect.new()
-	panel.color = Color(0.06, 0.05, 0.13, 0.94)
-	panel.position = _rect.position
-	panel.size = _rect.size
-	panel.z_index = 0
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(panel)
-
-	# Panel dış altın çerçevesi (3px)
-	var border := ReferenceRect.new()
-	border.position = _rect.position
-	border.size = _rect.size
-	border.border_color = Color(0.8, 0.65, 0.25, 0.85)
-	border.border_width = 3.0
-	border.editor_only = false
-	border.z_index = 1
-	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(border)
-
-	# Kayma şeridi (lane) - Pixel retro mavi/mor şerit
-	var lane := ColorRect.new()
-	lane.color = Color(0.1, 0.1, 0.2, 0.92)
-	lane.size = Vector2(_rect.size.x - 40.0, 140.0)
-	lane.position = Vector2(_rect.position.x + 20.0, _track_y - 70.0)
-	lane.z_index = 1
-	lane.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(lane)
-
-	# Şerit üst ve alt parlak çizgi
-	var top_line := ColorRect.new()
-	top_line.color = Color(0.35, 0.75, 1.0, 0.4)
-	top_line.size = Vector2(_rect.size.x - 40.0, 2.0)
-	top_line.position = Vector2(_rect.position.x + 20.0, _track_y - 70.0)
-	top_line.z_index = 2
-	add_child(top_line)
-
-	var bot_line := ColorRect.new()
-	bot_line.color = Color(0.35, 0.75, 1.0, 0.4)
-	bot_line.size = Vector2(_rect.size.x - 40.0, 2.0)
-	bot_line.position = Vector2(_rect.position.x + 20.0, _track_y + 68.0)
-	bot_line.z_index = 2
-	add_child(bot_line)
-
-	# Hedef çizgi (dikey parlak altın bar) + hedef karesi
-	var bar := ColorRect.new()
-	bar.color = Color(1.0, 0.9, 0.35, 0.95)
-	bar.size = Vector2(8.0, 160.0)
-	bar.position = Vector2(_hit_x - 4.0, _track_y - 80.0)
-	bar.z_index = 3
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bar)
-
+	GameLook.card(self, _rect)
 	_ring = Node2D.new()
-	_ring.position = Vector2(_hit_x, _track_y)
-	_ring.z_index = 3
-
-	# Hedef retro halka/kutu
-	var target_box := ReferenceRect.new()
-	target_box.position = Vector2(-46.0, -46.0)
-	target_box.size = Vector2(92.0, 92.0)
-	target_box.border_color = Color(1.0, 0.88, 0.3, 0.95)
-	target_box.border_width = 4.0
-	target_box.editor_only = false
-	_ring.add_child(target_box)
+	_ring.z_index = 1
+	_ring.draw.connect(_draw_timing)
 	add_child(_ring)
-
-	# Ritim nabzı
-	var pulse := create_tween().set_loops()
-	pulse.tween_property(_ring, "scale", Vector2(1.15, 1.15), _beat * 0.5).set_trans(Tween.TRANS_SINE)
-	pulse.tween_property(_ring, "scale", Vector2(1.0, 1.0), _beat * 0.5).set_trans(Tween.TRANS_SINE)
-
-	# İpucu etiketi (Pixel Font)
-	_hint = Label.new()
-	_hint.position = Vector2(_rect.position.x + 24.0, _rect.position.y + 12.0)
-	_hint.add_theme_font_override("font", PIXEL_FONT)
-	_hint.add_theme_font_size_override("font_size", 28)
-	_hint.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
-	_hint.add_theme_constant_override("outline_size", 4)
-	_hint.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.08, 1.0))
-	_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hint = GameLook.label("HALKA KAPANINCA HAREKET ET", 28)
+	_hint.position = _rect.position + Vector2(20, 20)
+	_hint.size.x = _rect.size.x - 40
+	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_hint)
-	_update_hint()
+	_timing_label = GameLook.label("HAZIRLAN", 34)
+	_timing_label.position = Vector2(_rect.position.x, _track_y + 148)
+	_timing_label.size.x = _rect.size.x
+	_timing_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(_timing_label)
+
+func _draw_timing() -> void:
+	if _finished:
+		return
+	var center := Vector2(_hit_x, _track_y)
+	_ring.draw_arc(center, 132, 0, TAU, 64, Color("d4dfd3"), 6)
+	_ring.draw_arc(center, 132, -PI / 2, -PI / 2 + TAU * maxf(0.005, _phase), 64, GameLook.TEAL, 9)
 
 func _build_notes() -> void:
 	for i in range(_steps.size()):
@@ -191,72 +127,37 @@ func _build_notes() -> void:
 # Retro Pixel Tile Oluşturucu (Oklar & Nokta). Finisher tile daha büyük + kızıl vurgu.
 func _create_pixel_tile(step_val: int, is_finisher: bool) -> Node2D:
 	var root := Node2D.new()
-
-	var accent := Color(1.0, 0.78, 0.25)
-	var symbol := "●"
-	match step_val:
-		InputSequence.Step.TAP:
-			accent = Color(1.0, 0.78, 0.25)   # Amber Gold Dot
-			symbol = "●"
-		InputSequence.Step.SWIPE_LEFT:
-			accent = Color(0.3, 0.85, 1.0)    # Cyan Left Arrow
-			symbol = "◀"
-		InputSequence.Step.SWIPE_RIGHT:
-			accent = Color(0.85, 0.45, 1.0)   # Arcane Right Arrow
-			symbol = "▶"
-		InputSequence.Step.SWIPE_UP:
-			accent = Color(0.35, 0.9, 0.5)    # Emerald Up Arrow
-			symbol = "▲"
-		InputSequence.Step.SWIPE_DOWN:
-			accent = Color(1.0, 0.45, 0.35)   # Flame Down Arrow
-			symbol = "▼"
-
-	# Finisher: daha büyük kutu + kızıl-altın çerçeve (okunur "SON VURUŞ").
-	var box: float = 100.0 if is_finisher else 84.0
-	var half: float = box * 0.5
-	var frame_col := Color(1.0, 0.5, 0.15) if is_finisher else accent
-
-	# Pixel kutu arka planı
-	var bg := ColorRect.new()
-	bg.size = Vector2(box, box)
-	bg.position = Vector2(-half, -half)
-	bg.color = Color(0.12, 0.06, 0.06, 0.96) if is_finisher else Color(0.08, 0.08, 0.16, 0.95)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(bg)
-
-	# Çerçeve
-	var frame := ReferenceRect.new()
-	frame.size = Vector2(box, box)
-	frame.position = Vector2(-half, -half)
-	frame.border_color = frame_col
-	frame.border_width = 5.0 if is_finisher else 3.5
-	frame.editor_only = false
-	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(frame)
-
-	# Köşe vurguları (İç parıltı)
-	var inner_bg := ColorRect.new()
-	inner_bg.size = Vector2(box - 10.0, box - 10.0)
-	inner_bg.position = Vector2(-half + 5.0, -half + 5.0)
-	inner_bg.color = Color(frame_col.r, frame_col.g, frame_col.b, 0.15)
-	inner_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(inner_bg)
-
-	# Ok / Nokta Sembolü (PixelFont)
-	var lbl := Label.new()
-	lbl.text = symbol
-	lbl.add_theme_font_override("font", PIXEL_FONT)
-	lbl.add_theme_font_size_override("font_size", 44 if is_finisher else 36)
-	lbl.add_theme_color_override("font_color", accent.lightened(0.3))
-	lbl.add_theme_constant_override("outline_size", 6)
-	lbl.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.05, 1.0))
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.size = Vector2(box, box)
-	lbl.position = Vector2(-half, -half)
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(lbl)
-
+	var accent := GameLook.CORAL if is_finisher else GameLook.TEAL
+	var plate := Polygon2D.new()
+	var points := PackedVector2Array()
+	for i in range(32):
+		points.append(Vector2.from_angle(TAU * i / 32.0) * 46)
+	plate.polygon = points
+	plate.color = accent.lightened(0.65)
+	root.add_child(plate)
+	var ring := Line2D.new()
+	ring.points = points
+	ring.closed = true
+	ring.width = 3
+	ring.default_color = accent.darkened(0.25)
+	root.add_child(ring)
+	if step_val == InputSequence.Step.TAP:
+		var l := GameLook.label("TAP", 26)
+		l.position = Vector2(-44, -44)
+		l.size = Vector2(88, 88)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		root.add_child(l)
+	else:
+		# Native pixel arrow: no font-dependent missing glyphs.
+		var arrow := Polygon2D.new()
+		arrow.polygon = PackedVector2Array([Vector2(-27,-8), Vector2(5,-8), Vector2(5,-24), Vector2(29,0), Vector2(5,24), Vector2(5,8), Vector2(-27,8)])
+		arrow.color = GameLook.INK
+		match step_val:
+			InputSequence.Step.SWIPE_LEFT: arrow.rotation = PI
+			InputSequence.Step.SWIPE_UP: arrow.rotation = -PI / 2
+			InputSequence.Step.SWIPE_DOWN: arrow.rotation = PI / 2
+		root.add_child(arrow)
 	return root
 
 func _update_hint() -> void:
@@ -264,39 +165,53 @@ func _update_hint() -> void:
 	for n in _notes:
 		if n.get("hit", false):
 			done += 1
-	# Son vurma yaklaşınca oyuncuyu uyar.
-	var tail := ""
-	if _notes.size() >= 2 and done == _notes.size() - 1 and not _broke:
-		tail = "  🔥 SON VURUŞ!"
-	_hint.text = "⚡ KOMBO — DOĞRU JESTİ YAP (%d/%d)%s" % [done, _notes.size(), tail]
+	_hint.text = "HALKA KAPANINCA HAREKET ET   %d / %d" % [mini(done + 1, _notes.size()), _notes.size()]
 
-# --- Döngü ---
+func _first_pending() -> int:
+	for i in range(_notes.size()):
+		if not _notes[i]["hit"]:
+			return i
+	return -1
 
 func _process(delta: float) -> void:
 	if _finished or not is_inside_tree():
 		return
 	_clock += delta
-	for n in _notes:
-		if n.get("hit", false):
-			continue
-		var raw_node = n.get("node", null)
-		if not is_instance_valid(raw_node):
-			continue
-		var node: Node2D = raw_node
-		var x: float = _hit_x + (float(n["t"]) - _clock) * _speed
-		node.position.x = x
-		if _clock > float(n["t"]) + GOOD_WINDOW:
-			# Iskalandı -> KOMBO KIRILIR (kalan tile'lar düşer, sıra rakibe geçer).
-			n["hit"] = true
-			n["result"] = InputEvaluator.Result.MISS
-			_pop("ISKA!", Color(0.95, 0.4, 0.35))
-			tile_resolved.emit(_index_of(n), _notes.size(), InputEvaluator.Result.MISS, n["is_finisher"], 0.0)
-			_break_combo()
-			return
-	# Bitiş: son nota + kuyruk geçti (kırılmadan tümü çözüldüyse).
-	var last_t: float = _lead + float(maxi(0, _steps.size() - 1)) * _beat
-	if _clock > last_t + GOOD_WINDOW + TAIL:
+	var first := _first_pending()
+	if first < 0:
 		_finish()
+		return
+	if first != _current:
+		_current = first
+		_revealed_at = _clock
+	var current: Dictionary = _notes[first]
+	var target_time: float = current["t"]
+	_phase = clampf((_clock - _revealed_at) / maxf(0.01, target_time - _revealed_at), 0, 1)
+	var now := absf(target_time - _clock) <= PERFECT_WINDOW
+	var action: String = ["TAP · DOKUN", "SOLA KAYDIR", "SAĞA KAYDIR", "YUKARI KAYDIR", "AŞAĞI KAYDIR"][int(current["step"])]
+	_timing_label.text = ("ŞİMDİ!  " if now else "HAZIRLAN  ") + action
+	if current["is_finisher"]:
+		_timing_label.text += " · SON VURUŞ"
+	_timing_label.add_theme_color_override("font_color", GameLook.TEAL.darkened(0.3) if now else GameLook.INK)
+	var remaining := _notes.size() - first - 1
+	for i in range(first, _notes.size()):
+		var node: Node2D = _notes[i]["node"]
+		if not is_instance_valid(node):
+			continue
+		if i == first:
+			node.position = Vector2(_hit_x, _track_y)
+			node.scale = Vector2.ONE * 2.45
+			node.modulate.a = lerpf(0.16, 1.0, _phase)
+		else:
+			node.position = Vector2(_hit_x + (i - first - 1 - (remaining - 1) * 0.5) * 105, _rect.end.y - 73)
+			node.scale = Vector2.ONE * 0.8
+			node.modulate.a = 0.55 if i == first + 1 else 0.32
+	_ring.queue_redraw()
+	if _clock > target_time + GOOD_WINDOW:
+		current["hit"] = true
+		current["result"] = InputEvaluator.Result.MISS
+		tile_resolved.emit(first, _notes.size(), InputEvaluator.Result.MISS, current["is_finisher"], 0.0)
+		_break_combo()
 
 # --- Girdi (Jest Algılama: TAP & SWIPE) ---
 
@@ -348,17 +263,15 @@ func _vector_to_step(diff: Vector2) -> int:
 
 # Jest sonucunu çizgiye en yakın VURULMAMIŞ notaya eşle (yön + zamanlama).
 func _register_gesture(detected_step: int) -> void:
-	var best: Dictionary = {}
-	var best_err := GOOD_WINDOW + 0.001
-	for n in _notes:
-		if n.get("hit", false):
-			continue
-		var err: float = abs(float(n["t"]) - _clock)
-		if err < best_err:
-			best_err = err
-			best = n
-	if best.is_empty():
-		return   # pencere dışı basış/jest -> yok say (fail-soft)
+	# Always resolve the displayed large cue, even when fast timing windows overlap.
+	var first := _first_pending()
+	if first < 0:
+		return
+	var best: Dictionary = _notes[first]
+	var best_err := absf(float(best["t"]) - _clock)
+	if best_err > GOOD_WINDOW:
+		_timing_label.text = "BİRAZ BEKLE · HALKAYI İZLE"
+		return
 
 	best["hit"] = true
 	var req_step: int = int(best.get("step", InputSequence.Step.TAP))
@@ -440,7 +353,7 @@ func _pop(txt: String, col: Color) -> void:
 	lbl.add_theme_color_override("font_color", col)
 	lbl.add_theme_constant_override("outline_size", 8)
 	lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.08, 1.0))
-	lbl.position = Vector2(_hit_x - 60.0, _track_y - 120.0)
+	lbl.position = Vector2(_hit_x - 90.0, _rect.position.y - 48.0)
 	lbl.z_index = 5
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(lbl)
@@ -453,8 +366,8 @@ func _flash_ring() -> void:
 	if _ring == null:
 		return
 	var tw := create_tween()
-	tw.tween_property(_ring, "scale", Vector2(1.25, 1.25), 0.08)
-	tw.tween_property(_ring, "scale", Vector2(1.0, 1.0), 0.12)
+	tw.tween_property(_ring, "modulate", Color(1.3, 1.3, 1.0), 0.06)
+	tw.tween_property(_ring, "modulate", Color.WHITE, 0.12)
 
 func _fade_note(node: Node2D) -> void:
 	if not is_instance_valid(node):

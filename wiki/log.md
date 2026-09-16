@@ -1,12 +1,31 @@
 ---
 type: meta
 title: "Operation Log"
-updated: 2026-09-06
+updated: 2026-09-16
 ---
 
 # Operation Log
 
 Append-only. **New entries go at the TOP.** Format:
+
+## [2026-09-16] feature | Tatlış açık hava assetleri, sekiz form ve okunur ritim
+- Files changed: `assets/worlds/*.png`, `assets/wizard/forms/*`, `assets/enemies/*_clean.png`, üç enemy `*_frames.tres`; `scripts/ui/game_look.gd`, `scripts/{home,level_select,characters,battle}.gd`, `scripts/rpg/{rhythm_minigame,turn_manager,damage_breakdown}.gd`, `scripts/rpg/run/{run_content,run_loadout}.gd`, `scripts/meta/mastery_track.gd`; `tests/{run_tests,test_run_manager,test_visual_revision,visual_review}.gd`, `tests/visual_review.tscn`; `export_presets.cfg`, `docs/art/revision-prompts.md`, ilgili wiki sayfaları; `build/wizard_game.apk` ve `output/visual-revision/` üretilmiş çıktılar.
+- Kullanıcı revizyonu: normal alev büyücüsünün mevcut tatlış animasyonu korundu; 7 görsel varyant, 5 gündüz/açık hava köprü mekanı, krem/koyu yazılı ana menü-bölüm seçimi-HUD-ekipman ekranı. Eski düşman atlaslarındaki delik şeffaflık temizlendi; orijinal kaynaklar korundu. Görseller built-in imagegen ile üretildi, prompt seti kaydedildi.
+- Kayan ritim şeridi kaldırıldı: büyük soluktan belirgine geçen aktif ok/TAP, dolan halka ve ŞİMDİ ipucu; küçük sonraki-hareket kuyruğu. Girdi daima büyük işarete uygulanır. Kör eden plazma düşman saldırısını %35 ihtimalle tamamen ıskalatır; oyuncunun fail-soft taban hasarı korunur. Mevcut arketip ailesi dönüşümde plazma karşılığına taşınır; eski mastery kayıtları uyumludur. → [[Tatlış Büyücüler ve Açık Hava Görsel Dili]]
+- Doğrulama: **2037 geçti, 0 başarısız** (seed'li 1000 saldırı örneklemi dahil). Metal renderer ile dört ekran, sekiz form, beş savaş mekanı ve üç ritim durumu incelendi; erken/yanlış/geç jest + çakışan zaman penceresi assertion'ları geçti; son renderer logu `VISUAL_REVIEW_OK`, hata yok. Önceden var olan headless ortam CA sertifikası ve test çıkışı kaynak uyarıları sürüyor. Döngü tween'leri hedef node'a bağlanarak geçişteki sonsuz-loop hatası düzeltildi.
+- Android debug APK export/sign/verify başarılı; test/rapor/wiki/QA çıktıları export dışına alındı. Telefona kurulum ve gerçek parmakla timing denemesi yapılmadı. Kod grafiği yeni yapıyla yeniden indekslendi.
+
+## [2026-09-15] config | Android cihaza APK export + install
+- Files changed: `build/wizard_game.apk` (yeniden export), `wiki/log.md`.
+- Godot 4.7.2 (`~/Downloads/Godot.app`) ile headless `--export-debug "Android"` çalıştırılıp güncel koddan yeni imzalı APK üretildi (~40 MB, Mastery Track + ritim değişiklikleri dahil).
+- MacDroid adb çöktü (exit 133) → SDK adb kullanıldı: `/opt/homebrew/share/android-commandlinetools/platform-tools/adb`. Xiaomi 23117RA68G cihaza `install -r` başarılı, monkey ile başlatıldı.
+- Kod değişmedi; grafik yeniden indekslenmedi.
+
+## [2026-09-15] document | Kârlılık ve ticari fizibilite raporu
+- Files changed: `reports/karlilik-analizi-2026-09-15.md`, `output/pdf/run-buyucusu-karlilik-raporu-2026-09-15.pdf`, `wiki/questions/profitability-analysis-2026-09-15.md`, `wiki/questions/_index.md`, `wiki/index.md`, `wiki/log.md`.
+- Kullanıcı isteğiyle tasarım belgeleri, kritik kod akışları ve dış pazar/platform kaynaklarından ayrıntılı kârlılık raporu hazırlandı. Gelir senaryoları, emek dahil maliyet, başa baş, nakit stresi ve ölçüm planı içerir.
+- Mevcut test çalıştırıcısı yeniden çalıştırıldı: 253 kontrol geçti, 0 başarısız; ortam sertifika hatası ve çıkış kaynak uyarıları raporda ayrıca belirtildi. Gerçek cihaz/oyuncu ve ödeme verisiyle doğrulama yapılmadığı açıklandı.
+- Rapor önerileri yeni ürün kararı veya onaylı bütçe değildir. Oyun kodu değiştirilmedi; oyun yapısı değişmediği için kod grafiği yeniden indekslenmedi. → [[Kârlılık Analizi - 2026-09-15]]
 
 ## [2026-09-15] feature | Değişim planı kalan 3 parça: mastery claim + StS node map + endless mode
 - Files changed: `scripts/meta/meta_progress.gd`, `scripts/home.gd`, `scripts/battle.gd`, `scripts/rpg/run/run_node.gd`, `stage_def.gd`, `run_manager.gd`, `run_content.gd`, `run_state.gd`; yeni `scripts/rpg/run/run_map.gd`; testler `test_meta_progress.gd`, `test_run_manager.gd`, yeni `tests/test_run_map.gd` + `run_tests.gd`

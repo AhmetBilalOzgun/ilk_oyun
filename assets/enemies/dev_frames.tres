@@ -1,54 +1,54 @@
 [gd_resource type="SpriteFrames" load_steps=14 format=3 uid="uid://cenemydevsf"]
 
-[ext_resource type="Texture2D" path="res://assets/enemies/dev.png" id="1_sheet"]
+[ext_resource type="Texture2D" path="res://assets/enemies/dev_clean.png" id="1_sheet"]
 
 [sub_resource type="AtlasTexture" id="A_0_0"]
 atlas = ExtResource("1_sheet")
-region = Rect2(0, 0, 96, 96)
+region = Rect2(0, 0, 313.5, 313.5)
 
 [sub_resource type="AtlasTexture" id="A_0_1"]
 atlas = ExtResource("1_sheet")
-region = Rect2(96, 0, 96, 96)
+region = Rect2(313.5, 0, 313.5, 313.5)
 
 [sub_resource type="AtlasTexture" id="A_0_2"]
 atlas = ExtResource("1_sheet")
-region = Rect2(192, 0, 96, 96)
+region = Rect2(627, 0, 313.5, 313.5)
 
 [sub_resource type="AtlasTexture" id="A_0_3"]
 atlas = ExtResource("1_sheet")
-region = Rect2(288, 0, 96, 96)
+region = Rect2(940.5, 0, 313.5, 313.5)
 
 [sub_resource type="AtlasTexture" id="A_1_0"]
 atlas = ExtResource("1_sheet")
-region = Rect2(0, 96, 96, 96)
+region = Rect2(0, 313.5, 313.5, 313.5)
 
 [sub_resource type="AtlasTexture" id="A_1_1"]
 atlas = ExtResource("1_sheet")
-region = Rect2(96, 96, 96, 96)
+region = Rect2(313.5, 313.5, 313.5, 313.5)
 
 [sub_resource type="AtlasTexture" id="A_1_2"]
 atlas = ExtResource("1_sheet")
-region = Rect2(192, 96, 96, 96)
+region = Rect2(627, 313.5, 313.5, 313.5)
 
 [sub_resource type="AtlasTexture" id="A_2_0"]
 atlas = ExtResource("1_sheet")
-region = Rect2(0, 192, 96, 96)
+region = Rect2(0, 627, 313.5, 313.5)
 
 [sub_resource type="AtlasTexture" id="A_3_0"]
 atlas = ExtResource("1_sheet")
-region = Rect2(0, 288, 96, 96)
+region = Rect2(0, 940.5, 313.5, 313.5)
 
 [sub_resource type="AtlasTexture" id="A_3_1"]
 atlas = ExtResource("1_sheet")
-region = Rect2(96, 288, 96, 96)
+region = Rect2(313.5, 940.5, 313.5, 313.5)
 
 [sub_resource type="AtlasTexture" id="A_3_2"]
 atlas = ExtResource("1_sheet")
-region = Rect2(192, 288, 96, 96)
+region = Rect2(627, 940.5, 313.5, 313.5)
 
 [sub_resource type="AtlasTexture" id="A_3_3"]
 atlas = ExtResource("1_sheet")
-region = Rect2(288, 288, 96, 96)
+region = Rect2(940.5, 940.5, 313.5, 313.5)
 
 [resource]
 animations = [

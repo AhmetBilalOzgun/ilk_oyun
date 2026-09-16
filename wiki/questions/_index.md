@@ -1,8 +1,8 @@
 ---
 type: meta
 title: "Questions Index"
-updated: 2026-09-06
-verified: 2026-09-06
+updated: 2026-09-15
+verified: 2026-09-15
 tags:
   - questions
 ---
@@ -13,4 +13,4 @@ Filed answers to recurring queries.
 
 ## Pages
 
-_(empty)_
+- [[Kârlılık Analizi - 2026-09-15]] — ticari fizibilite ve koşullu yatırım önerisi

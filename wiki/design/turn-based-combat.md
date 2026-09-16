@@ -2,8 +2,8 @@
 type: design
 title: "Turn-Based Savaş ve QTE"
 created: 2026-09-10
-updated: 2026-09-15
-verified: 2026-09-15  # + adaptive ritim zorluğu (piano tiles hızı: kalıcı+oturum skill, Meta.rhythm_speed_scale/record_rhythm_result)
+updated: 2026-09-16
+verified: 2026-09-16
 tags:
   - design
   - system
@@ -85,6 +85,9 @@ code_anchors:
     symbol: MetaProgress.record_rhythm_result
     file: scripts/meta/meta_progress.gd
 ---
+
+> **2026-09-16 revizyonu:** Güncel görsel/ritim yönü için [[Tatlış Büyücüler ve Açık Hava Görsel Dili]]. Kayan şerit kaldırıldı: büyük soluktan belirgine gelen aktif ok/TAP ve altta küçük kuyruk var. Plazmada kritik/patlama/kör etme arketipleri eklendi; kör etme düşman saldırısına %35 tam ıska uygular. Aşağıdaki piano-tiles/yalnız tint/plazma havuzu ertelendi açıklamaları tarihsel.
+
 
 # Turn-Based Savaş ve QTE
 

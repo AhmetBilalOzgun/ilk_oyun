@@ -4,6 +4,7 @@ class_name DamageBreakdown
 # Hasar hesabının AYRIŞTIRILMIŞ çıktısı. Debug overlay taban + bonus + zaaf/direnç
 # çarpanlarını ayrı ayrı gösterebilsin diye her adım saklanır. Saf veri.
 
+var missed: bool = false          # Enemy attack evaded by blinding plasma.
 var base: int = 0                   # skill.base_damage (garanti taban)
 var input_success: bool = false     # bonus_multiplier > 1.0 (MISS üstü sonuç)
 var input_quality: float = 0.0      # [0,1] aktif girdi kalitesi (UI/övgü için)

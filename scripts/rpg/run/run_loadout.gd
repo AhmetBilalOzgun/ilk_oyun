@@ -54,12 +54,19 @@ func acquire_rune(rune_id: String, catalog: SkillCatalog) -> MageForm:
 		return null
 	var f := catalog.form(to_id)
 	if f != null:
-		current_form = f
+		transform_to(f)
 	return f
 
 func transform_to(form: MageForm) -> void:
 	if form != null:
 		current_form = form
+		# Carry the chosen family into its new elemental variant; no dead burn hooks on plasma.
+		var pool := RunContent.plasma_archetypes() if form.id == "plasma" else RunContent.ember_archetypes()
+		for i in range(archetypes.size()):
+			for candidate in pool:
+				if candidate.id == archetypes[i].id:
+					archetypes[i] = candidate
+					break
 
 # --- Build arketipi (enhancement katmanı; kimlik-swap'tan bağımsız) ---
 

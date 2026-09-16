@@ -1,8 +1,8 @@
 ---
 type: meta
 title: "Code Map"
-updated: 2026-09-06
-verified: 2026-09-06
+updated: 2026-09-16
+verified: 2026-09-16
 tags:
   - code
 ---
@@ -15,7 +15,7 @@ Module clusters, what's indexed in the code graph, and how to query it.
 
 | Project | Indexed? | Graph name |
 |---|---|---|
-| _(none yet)_ | | |
+| İlk Oyun | 2026-09-16 | `Users-ahmetbilalozgun-Documents-Projects-Games-ilk_oyun` |
 
 ## Query the Graph
 
@@ -34,3 +34,7 @@ If a project is not indexed yet, run `index_repository` FIRST.
 ## Not Indexed — Read/Grep only
 
 _(list configs, assets, generated files here)_
+
+## Intent owners
+
+Görsel dil ve ritim sunumu: [[Tatlış Büyücüler ve Açık Hava Görsel Dili]]. Savaş/run niyeti: [[Turn-Based Savaş ve QTE]]. Güncel yapı ve komşulukları grafikten sorgula.

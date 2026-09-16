@@ -14,6 +14,8 @@ const TestInputEvaluator := preload("res://tests/test_input_evaluator.gd")
 const TestMageForm := preload("res://tests/test_mage_form.gd")
 const TestEquipment := preload("res://tests/test_equipment.gd")
 
+const TestVisualRevision := preload("res://tests/test_visual_revision.gd")
+
 var passed := 0
 var failed := 0
 var _cur := ""
@@ -46,5 +48,6 @@ func _initialize() -> void:
 	TestMetaProgress.run(self)
 	print("== Ekipman testleri ==")
 	TestEquipment.run(self)
+	TestVisualRevision.run(self)
 	print("== Sonuç: %d geçti, %d kaldı ==" % [passed, failed])
 	quit(1 if failed > 0 else 0)

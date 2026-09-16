@@ -1,56 +1,64 @@
 extends Control
 
-# Seviye seçimi. RunContent.level_count() kadar seviye listelenir; sadece açık
-# olanlar (Meta.is_level_unlocked) seçilebilir, gerisi KİLİTLİ. Seçince
-# Meta.selected_level yazılır ve savaş sahnesine geçilir. Geri -> home.
-
 const BATTLE := "res://scenes/battle.tscn"
 const HOME := "res://scenes/home.tscn"
 
 func _ready() -> void:
-	var bg := ColorRect.new()
-	bg.color = Color(0.11, 0.1, 0.15, 1)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
-
-	var title := Label.new()
-	title.text = "SEVİYE SEÇ"
-	title.position = Vector2(60, 80)
-	title.add_theme_font_size_override("font_size", 64)
+	GameLook.background(self, 1)
+	var title := GameLook.label("YOLCULUĞUNU SEÇ", 58)
+	title.position = Vector2(70, 80)
 	add_child(title)
-
-	# 20 seviye ekrana sığmaz -> kaydırılabilir liste.
+	var sub := GameLook.label("5 diyar · 20 bölüm · Bir sürü küçük keşif", 30)
+	sub.position = Vector2(70, 160)
+	add_child(sub)
 	var scroll := ScrollContainer.new()
-	scroll.position = Vector2(180, 260)
-	scroll.custom_minimum_size = Vector2(760, 1400)
-	scroll.size = Vector2(760, 1400)
+	scroll.position = Vector2(60, 250)
+	scroll.size = Vector2(960, 1430)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	add_child(scroll)
-
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 32)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 28)
 	scroll.add_child(box)
-
-	for i in range(RunContent.level_count()):
-		var unlocked: bool = Meta.is_level_unlocked(i)
-		var cleared: bool = i < Meta.cleared_levels
-		var b := Button.new()
-		var mark := "✓" if cleared else ("" if unlocked else "🔒")
-		b.text = "%s  %s  (+%d💰 +%d💎)" % [
-			RunContent.level_name(i), mark,
-			RunContent.reward_gold(i), RunContent.reward_crystal(i)]
-		b.custom_minimum_size = Vector2(720, 120)
-		b.add_theme_font_size_override("font_size", 40)
-		b.disabled = not unlocked
-		b.pressed.connect(_on_level.bind(i))
-		box.add_child(b)
-
+	for world in range(5):
+		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel", GameLook.panel())
+		box.add_child(card)
+		var content := VBoxContainer.new()
+		content.add_theme_constant_override("separation", 16)
+		card.add_child(content)
+		var thumb := TextureRect.new()
+		thumb.texture = GameLook.backdrop(world)
+		thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		thumb.custom_minimum_size = Vector2(870, 220)
+		content.add_child(thumb)
+		content.add_child(GameLook.label("%02d  %s" % [world + 1, GameLook.WORLD_NAMES[world]], 36))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 14)
+		content.add_child(row)
+		for offset in range(4):
+			var i := world * 4 + offset
+			var unlocked: bool = Meta.is_level_unlocked(i)
+			var cleared: bool = i < Meta.cleared_levels
+			var b := Button.new()
+			b.text = "%02d\n%s" % [i + 1, "BİTTİ" if cleared else ("OYNA" if unlocked else "KİLİTLİ")]
+			b.custom_minimum_size = Vector2(200, 112)
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			GameLook.button(b, GameLook.TEAL if cleared else GameLook.CORAL, 28)
+			b.disabled = not unlocked
+			b.pressed.connect(_on_level.bind(i))
+			row.add_child(b)
+		content.add_child(GameLook.label("Bölüm %d–%d  ·  %d–%d altın" % [world * 4 + 1, world * 4 + 4, RunContent.reward_gold(world * 4), RunContent.reward_gold(world * 4 + 3)], 24))
 	var back := Button.new()
-	back.text = "← GERİ"
-	back.custom_minimum_size = Vector2(300, 110)
-	back.add_theme_font_size_override("font_size", 40)
+	back.text = "← ANA MENÜ"
+	back.position = Vector2(60, 1740)
+	back.size = Vector2(960, 100)
+	GameLook.button(back)
 	back.pressed.connect(func(): get_tree().change_scene_to_file(HOME))
-	box.add_child(back)
+	add_child(back)
 
 func _on_level(i: int) -> void:
+	Meta.endless_run = false
 	Meta.selected_level = i
 	get_tree().change_scene_to_file(BATTLE)
